@@ -33,6 +33,13 @@ jobs:
       - name: Run Bats tests
         run: make test
 
+      - name: Upload to Codecov
+        uses: codecov/codecov-action@v6
+        with:
+          files: reports/tests/report.xml
+          token: ${{ secrets.CODECOV_TOKEN }}
+          report_type: test_results
+
   coverage:
     name: Coverage
     runs-on: ubuntu-latest
@@ -54,7 +61,7 @@ jobs:
         run: make coverage
 
       - name: Upload to Codecov
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v6
         with:
-          directory: coverage/
+          directory: reports/coverage/
           token: ${{ secrets.CODECOV_TOKEN }}
