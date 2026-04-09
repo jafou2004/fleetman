@@ -17,7 +17,8 @@ SHELL := /bin/bash
 SCRIPTS := $(shell find scripts/ -name "*.sh" ! -path "*/old/*" | sort) install.sh
 SCRIPTS_NOEXT := scripts/bin/fleetman
 BATS_JOBS ?= $(shell nproc 2>/dev/null || echo 4)
-COVERAGE_DIR := coverage
+COVERAGE_DIR := reports/coverage
+TEST_REPORT_DIR := reports/tests
 
 .PHONY: lint lint-verbose check test test-unit test-integration coverage
 
@@ -34,7 +35,8 @@ check: lint
 
 test:
 	@echo "=== Bats (all tests, $(BATS_JOBS) jobs) ==="
-	@bats --jobs $(BATS_JOBS) --recursive tests/
+	@mkdir -p $(TEST_REPORT_DIR)
+	@bats --jobs $(BATS_JOBS) --recursive --report-formatter junit --output $(TEST_REPORT_DIR)  tests/
 
 test-unit:
 	@echo "=== Bats (unit, $(BATS_JOBS) jobs) ==="
