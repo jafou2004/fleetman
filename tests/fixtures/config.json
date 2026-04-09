@@ -1,0 +1,40 @@
+{
+  "parallel": 1,
+  "pods_dir": "/opt/pod",
+  "repo_url": "https://github.com/example/fleetman.git",
+  "env_colors": { "dev": "green", "test": "yellow", "prod": "red" },
+  "status_checks": { "containers": ["nginx", "app"], "wud_port": 3000 },
+  "welcome": {
+    "enabled": true,
+    "show_pods": true,
+    "show_os": true,
+    "show_docker": true
+  },
+  "selfupdate": {
+    "track": "tags",
+    "branch": "main",
+    "pin": ""
+  },
+  "template_vars": {
+    "company": "ACME",
+    "region": {
+      "*":   "EU",
+      "dev": "EU-DEV"
+    }
+  },
+  "pods": {
+    "api": {
+      "env_vars": ["API_VERSION"],
+      "env_templates": {
+        "API_TITLE": "{name} {num} [{ENV}]",
+        "API_HOST": "{hostname}",
+        "API_COMPANY": "{COMPANY}"
+      }
+    }
+  },
+  "servers": {
+    "dev":  ["dev1.fleet.test", "dev2.fleet.test"],
+    "test": ["test1.fleet.test"],
+    "prod": ["prod1.fleet.test", "prod2.fleet.test"]
+  }
+}

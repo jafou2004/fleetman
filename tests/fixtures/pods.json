@@ -1,0 +1,5 @@
+{
+  "dev":  { "dev1.fleet.test": ["api", "worker"], "dev2.fleet.test": ["api"] },
+  "test": { "test1.fleet.test": ["api", "worker"] },
+  "prod": { "prod1.fleet.test": ["api"], "prod2.fleet.test": ["worker"] }
+}

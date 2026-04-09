@@ -1,0 +1,60 @@
+{
+  "parallel": 4,
+  "pods_dir": "/opt/pod",
+  "base_folder": "",
+  "pods_ignore": ["^tmp-", "^test-"],
+  "env_colors": { "dev": "green", "test": "yellow", "prod": "red" },
+  "status_checks": { "containers": ["my-service", "my-logger"], "wud_port": 3000 },
+
+  "selfupdate": {
+    "track": "tags",
+    "branch": "main",
+    "pin": ""
+  },
+
+  "welcome": {
+    "enabled": true,
+    "show_pods": true,
+    "show_os": true,
+    "show_docker": true
+  },
+
+  "template_vars": {
+    "company": "ACME",
+    "region": {
+      "*":    "EU",
+      "dev":  "EU-DEV",
+      "test": "EU-TEST"
+    }
+  },
+
+  "pods": {
+    "my-app-docker": {
+      "env_vars": ["MY_APP_VERSION"],
+      "env_templates": {
+        "MY_APP_TITLE": "[{COMPANY}] Serveur {name} {num}",
+        "MY_APP_HOST":  "{hostname}",
+        "MY_APP_ENV":   "{ENV}",
+        "MY_APP_LABEL": "Instance {Suffix} n°{num}"
+      }
+    }
+  },
+
+  "servers": {
+    "dev": [
+      "server1-dev.abc.example.com",
+      "server2-dev.abc.example.com",
+      "server3-dev.abc.example.com"
+    ],
+    "test": [
+      "server1-test.abc.example.com",
+      "server2-test.abc.example.com",
+      "server3-test.abc.example.com"
+    ],
+    "prod": [
+      "server1-prod.abc.example.com",
+      "server2-prod.abc.example.com",
+      "server3-prod.abc.example.com"
+    ]
+  }
+}

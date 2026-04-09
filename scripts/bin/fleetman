@@ -1,0 +1,20 @@
+#!/bin/bash
+
+# Fleet management CLI entry point.
+# Usage: fleetman <command> [options]
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+# shellcheck source=scripts/lib/vars.sh
+source "$ROOT/lib/vars.sh"
+# shellcheck source=scripts/internal/cli.sh
+source "$ROOT/internal/cli.sh"
+
+_CLI_VERSION="$(cat "$ROOT/internal/VERSION" 2>/dev/null || echo "unknown")"
+
+if [[ "${1:-}" == "-v" || "${1:-}" == "--version" ]]; then
+    echo "$APP_NAME $_CLI_VERSION"
+    exit 0
+fi
+
+cli_dispatch "$ROOT/commands" "$@"

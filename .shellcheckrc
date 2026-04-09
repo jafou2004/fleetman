@@ -1,0 +1,48 @@
+# ShellCheck configuration for the Diplotaxis fleet management scripts.
+#
+# Disabled globally:
+#
+# SC1090 - Can't follow non-constant source.
+#   All scripts use dynamic paths: source "$(dirname "${BASH_SOURCE[0]}")/../lib/vars.sh"
+#   The dynamic path is intentional (scripts are symlinked and deployed).
+#   Adding # shellcheck source= annotations to all callers would be
+#   fragile and require maintenance on every structural change.
+disable=SC1090
+# SC1091 - Not following sourced file (dynamic path / file not found).
+#   Companion to SC1090. Disabled for the same reason.
+disable=SC1091
+# SC2154 - Variable is referenced but not assigned.
+#   All color variables (GREEN, RED, YELLOW, BLUE, NC), fleet globals
+#   (CONFIG_FILE, MASTER_HOST, DATA_DIR, PODS_FILE, PODS_DIR, FLEET_KEY,
+#   FLEET_PASS_FILE), auth globals (PASSWORD, B64_PASS), and shared state
+#   (ENV, ENV_FILTER, SEARCH, SELECTED_POD, pod_servers, _all,
+#   server_pods, server_order, SELECTED_IDX, success_count, warn_count,
+#   failure_count) are all defined in sourced lib files (vars.sh, config.sh,
+#   auth.sh…), which ShellCheck cannot follow due to SC1090/SC1091 being
+#   disabled. Without source-following, this check produces 100% false
+#   positives on every caller script.
+disable=SC2154
+# SC2153 - Possible misspelling: PODS_DIR may not be assigned. Did you mean POD_DIR?
+#   PODS_DIR is the correct global (the fleet pods base directory, set in vars.sh);
+#   POD_DIR is a local variable in individual scripts. ShellCheck conflates the two.
+disable=SC2153
+# SC2001 - See if you can use ${variable//search/replace} instead.
+#   compute_title() in _common.sh uses sed for complex regex patterns (strip digits,
+#   strip non-digits) that have no direct bash parameter expansion equivalent.
+disable=SC2001
+# SC2030 - Modification of VAR is local (to subshell caused by @bats test).
+disable=SC2030
+# SC2031 - VAR was modified in a subshell. That change might be lost.
+#   In bats, each @test block runs in its own subshell. Overriding globals
+#   (CONFIG_FILE, PODS_FILE…) inside a test is intentional — the change is
+#   scoped to that test, which is exactly the desired isolation behaviour.
+disable=SC2031
+# SC2034 - Variable appears unused.
+#   Globals defined in lib files (vars.sh, config.sh, ui.sh, templates.sh…)
+#   are used by callers via source. ShellCheck sees only the defining file
+#   and cannot follow cross-file usage without source annotation.
+disable=SC2034
+# SC2119 - Use foo "$@" if function's $1 should mean script's $1.
+#   env_label() accepts an optional arg (${1-$ENV}). Call sites without args
+#   intentionally rely on the global $ENV — passing "$@" would be wrong.
+disable=SC2119

@@ -1,0 +1,25 @@
+{
+  "dev": {
+    "dev1.fleet.test": {
+      "api":    [{"Service": "web"}, {"Service": "db"}],
+      "worker": [{"Service": "app"}]
+    },
+    "dev2.fleet.test": {
+      "api": [{"Service": "web"}]
+    }
+  },
+  "test": {
+    "test1.fleet.test": {
+      "api":    [{"Service": "web"}, {"Service": "db"}],
+      "worker": [{"Service": "app"}]
+    }
+  },
+  "prod": {
+    "prod1.fleet.test": {
+      "api": [{"Service": "web"}]
+    },
+    "prod2.fleet.test": {
+      "worker": [{"Service": "app"}]
+    }
+  }
+}

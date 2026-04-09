@@ -1,0 +1,140 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: 'Semver level to bump'
+        required: true
+        type: choice
+        options: [patch, minor, major]
+        default: patch
+
+permissions:
+  contents: write
+
+jobs:
+  check-ci:
+    name: Check CI
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify branch is main
+        run: |
+          if [ "${{ github.ref }}" != "refs/heads/main" ]; then
+            echo "Release must be triggered from main (got: ${{ github.ref }})."
+            exit 1
+          fi
+
+      - name: Check last CI run on main is successful
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          conclusion=$(gh run list \
+            --repo "${{ github.repository }}" \
+            --workflow=ci.yml \
+            --branch=main \
+            --limit=1 \
+            --json conclusion \
+            --jq '.[0].conclusion')
+          if [ "$conclusion" != "success" ]; then
+            echo "Last CI run on main is not successful (got: $conclusion)."
+            exit 1
+          fi
+
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+    needs: check-ci
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute versions
+        run: |
+          BASE=$(sed 's/-dev$//' scripts/internal/VERSION)
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$BASE"
+
+          case "${{ inputs.bump }}" in
+            patch)
+              RELEASE="$MAJOR.$MINOR.$PATCH"
+              NEXT="$MAJOR.$MINOR.$((PATCH + 1))-dev"
+              ;;
+            minor)
+              RELEASE="$MAJOR.$((MINOR + 1)).0"
+              NEXT="$MAJOR.$((MINOR + 1)).1-dev"
+              ;;
+            major)
+              RELEASE="$((MAJOR + 1)).0.0"
+              NEXT="$((MAJOR + 1)).0.1-dev"
+              ;;
+          esac
+
+          echo "RELEASE=$RELEASE" >> "$GITHUB_ENV"
+          echo "NEXT=$NEXT"       >> "$GITHUB_ENV"
+
+      - name: Extract changelog content
+        run: |
+          CHANGELOG_CONTENT=$(awk '
+            /^## \[Unreleased\]/ { found=1; next }
+            found && /^## \[/    { exit }
+            found                { print }
+          ' CHANGELOG.md)
+
+          {
+            echo "CHANGELOG_CONTENT<<EOF"
+            echo "$CHANGELOG_CONTENT"
+            echo "EOF"
+          } >> "$GITHUB_ENV"
+
+      - name: Update CHANGELOG.md
+        run: |
+          TODAY=$(date +%Y-%m-%d)
+          echo "$CHANGELOG_CONTENT" > /tmp/changelog_content.txt
+
+          awk -v version="$RELEASE" -v date="$TODAY" '
+            /^## \[Unreleased\]/ {
+              print
+              print ""
+              print "## [" version "] - " date
+              while ((getline line < "/tmp/changelog_content.txt") > 0) print line
+              close("/tmp/changelog_content.txt")
+              found=1
+              next
+            }
+            found && /^## \[/ { found=0 }
+            found             { next }
+                              { print }
+          ' CHANGELOG.md > CHANGELOG.md.tmp && mv CHANGELOG.md.tmp CHANGELOG.md
+
+      - name: Configure git
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Commit release version and tag
+        run: |
+          echo "$RELEASE" > scripts/internal/VERSION
+          git add scripts/internal/VERSION CHANGELOG.md
+          git commit -m "chore: release v$RELEASE"
+          git tag "v$RELEASE"
+
+      - name: Commit next dev version
+        run: |
+          echo "$NEXT" > scripts/internal/VERSION
+          git add scripts/internal/VERSION
+          git commit -m "chore: bump to $NEXT"
+
+      - name: Push commits and tag
+        run: git push origin main --follow-tags
+
+      - name: Create draft release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "$CHANGELOG_CONTENT" > /tmp/release_notes.txt
+          gh release create "v$RELEASE" \
+            --draft \
+            --title "v$RELEASE" \
+            --notes-file /tmp/release_notes.txt
