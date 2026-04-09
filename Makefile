@@ -49,6 +49,7 @@ test-integration:
 coverage:
 	@echo "=== Coverage (kcov + bats) ==="
 	@rm -rf $(COVERAGE_DIR)/
+	@mkdir -p $(COVERAGE_DIR)
 	@kcov \
 		--include-path=scripts/,install.sh \
 		--bash-parse-files-in-dir=scripts/ \
