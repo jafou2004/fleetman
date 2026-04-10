@@ -237,7 +237,7 @@ v1.2.3"
     run _selfupdate_local "$fake_pdir" "tags" "v1.2.3" "main"
     [ "$status" -eq 0 ]
     grep -q "run_migrations.sh" "$BATS_TEST_TMPDIR/bash_calls.log"
-    grep -q "fleetman.*sync" "$BATS_TEST_TMPDIR/bash_calls.log"
+    grep -q "fleetman.*sync.*--quick" "$BATS_TEST_TMPDIR/bash_calls.log"
 }
 
 @test "_selfupdate_local: tags already up to date → return 0, bash not called" {
@@ -268,7 +268,7 @@ v1.2.3"
     run _selfupdate_local "$fake_pdir" "tags" "" "main"
     [ "$status" -eq 0 ]
     grep -q "run_migrations.sh" "$BATS_TEST_TMPDIR/bash_calls.log"
-    grep -q "fleetman.*sync" "$BATS_TEST_TMPDIR/bash_calls.log"
+    grep -q "fleetman.*sync.*--quick" "$BATS_TEST_TMPDIR/bash_calls.log"
 }
 
 @test "_selfupdate_local: commits already up to date → return 0, bash not called" {
@@ -299,7 +299,7 @@ v1.2.3"
     run _selfupdate_local "$fake_pdir" "commits" "" "main"
     [ "$status" -eq 0 ]
     grep -q "run_migrations.sh" "$BATS_TEST_TMPDIR/bash_calls.log"
-    grep -q "fleetman.*sync" "$BATS_TEST_TMPDIR/bash_calls.log"
+    grep -q "fleetman.*sync.*--quick" "$BATS_TEST_TMPDIR/bash_calls.log"
 }
 
 @test "_selfupdate_local: branch already up to date → return 0, bash not called" {
@@ -333,7 +333,7 @@ v1.2.3"
     run _selfupdate_local "$fake_pdir" "branch" "" "main"
     [ "$status" -eq 0 ]
     grep -q "run_migrations.sh" "$BATS_TEST_TMPDIR/bash_calls.log"
-    grep -q "fleetman.*sync" "$BATS_TEST_TMPDIR/bash_calls.log"
+    grep -q "fleetman.*sync.*--quick" "$BATS_TEST_TMPDIR/bash_calls.log"
 }
 
 # ── _parse_remote_result ───────────────────────────────────────────────────────
@@ -360,7 +360,7 @@ v1.2.3"
     [ "$status" -eq 0 ]
     [[ "$output" == *"Updated"* ]]
     grep -q "run_migrations.sh" "$BATS_TEST_TMPDIR/ssh_calls.log"
-    grep -q "fleetman.*sync" "$BATS_TEST_TMPDIR/ssh_calls.log"
+    grep -q "fleetman.*sync.*--quick" "$BATS_TEST_TMPDIR/ssh_calls.log"
 }
 
 @test "_parse_remote_result: FAILED → err message, return 1" {
@@ -412,28 +412,149 @@ v1.2.3"
 
 # ── cmd_selfupdate: Case 2 (git clone distant) ────────────────────────────────
 
-@test "cmd_selfupdate: Case 2, git_server absent → exit 1 + 'not cached'" {
+@test "cmd_selfupdate: Case 2, git_server absent, scan finds nothing → warn + exit 1" {
     export FLEETMAN_DIR="$BATS_TEST_TMPDIR/no-clone"
     rm -f "$GIT_SERVER_FILE"
     check_sshpass()     { :; }
     check_config_file() { :; }
     ask_password()      { PASSWORD="dummy"; B64_PASS="ZHVtbXk="; }
+    ssh_cmd() { return 1; }
+    export -f ssh_cmd
     run cmd_selfupdate
+    unset -f ssh_cmd
     [ "$status" -eq 1 ]
+    [[ "$output" == *"not cached"* ]]
+    [[ "$output" == *"No server"* ]]
+}
+
+@test "cmd_selfupdate: Case 2, git_server absent, scan finds server → proceed (no exit 1)" {
+    export FLEETMAN_DIR="$BATS_TEST_TMPDIR/no-clone"
+    rm -f "$GIT_SERVER_FILE"
+    check_sshpass()     { :; }
+    check_config_file() { :; }
+    ask_password()      { PASSWORD="dummy"; B64_PASS="ZHVtbXk="; }
+    local _call=0
+    ssh_cmd() {
+        _call=$((_call + 1))
+        [[ "$_call" -eq 1 ]] && { echo "dev1.fleet.test"; return 0; }
+        return 1
+    }
+    export -f ssh_cmd
+    _parse_remote_result() { :; }
+    export -f _parse_remote_result
+    run cmd_selfupdate
+    unset -f ssh_cmd _parse_remote_result
+    # Must NOT exit 1 due to missing git_server — may exit 0 or 1 from update logic
+    [[ "$output" != *"No server"* ]]
     [[ "$output" == *"not cached"* ]]
 }
 
-@test "cmd_selfupdate: Case 2, git_server present but server unreachable → exit 1 + 'unreachable'" {
+@test "cmd_selfupdate: Case 2, stale cache, scan finds nothing → warn unreachable + exit 1" {
     export FLEETMAN_DIR="$BATS_TEST_TMPDIR/no-clone"
     echo "remote.server.test" > "$GIT_SERVER_FILE"
     check_sshpass()     { :; }
     check_config_file() { :; }
     ask_password()      { PASSWORD="dummy"; B64_PASS="ZHVtbXk="; }
     ssh_cmd() { return 1; }
-    export -f ssh_cmd   # optional: bats run inherits functions via subshell; export -f defensive
+    export -f ssh_cmd
     run cmd_selfupdate
     unset -f ssh_cmd
     [ "$status" -eq 1 ]
     [[ "$output" == *"unreachable"* ]]
+    [[ "$output" == *"No server"* ]]
 }
 
+@test "cmd_selfupdate: Case 2, stale cache, scan finds server → proceed (no exit 1)" {
+    export FLEETMAN_DIR="$BATS_TEST_TMPDIR/no-clone"
+    echo "old.server.test" > "$GIT_SERVER_FILE"
+    check_sshpass()     { :; }
+    check_config_file() { :; }
+    ask_password()      { PASSWORD="dummy"; B64_PASS="ZHVtbXk="; }
+    local _call=0
+    ssh_cmd() {
+        _call=$((_call + 1))
+        # Call 1: cached server check (old.server.test) → fail
+        [[ "$_call" -eq 1 ]] && return 1
+        # Call 2: scan — first candidate → succeed
+        [[ "$_call" -eq 2 ]] && return 0
+        return 1
+    }
+    export -f ssh_cmd
+    _parse_remote_result() { :; }
+    export -f _parse_remote_result
+    run cmd_selfupdate
+    unset -f ssh_cmd _parse_remote_result
+    [[ "$output" != *"No server"* ]]
+    [[ "$output" == *"unreachable"* ]]
+}
+
+# ── _find_git_server ──────────────────────────────────────────────────────────
+
+@test "_find_git_server: first server has git clone → return 0, FQDN printed, cache written" {
+    ssh_cmd() {
+        # Only dev1.fleet.test has a git clone
+        [[ "$1" == "dev1.fleet.test" ]] && return 0
+        return 1
+    }
+    export -f ssh_cmd
+    rm -f "$GIT_SERVER_FILE"
+
+    run _find_git_server
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"dev1.fleet.test"* ]]
+    [ "$(cat "$GIT_SERVER_FILE")" = "dev1.fleet.test" ]
+}
+
+@test "_find_git_server: second server has git clone → return 0, correct FQDN" {
+    ssh_cmd() {
+        [[ "$1" == "dev2.fleet.test" ]] && return 0
+        return 1
+    }
+    export -f ssh_cmd
+    rm -f "$GIT_SERVER_FILE"
+
+    run _find_git_server
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"dev2.fleet.test"* ]]
+}
+
+@test "_find_git_server: no server has git clone → return 1, no output, cache not written" {
+    ssh_cmd() { return 1; }
+    export -f ssh_cmd
+    rm -f "$GIT_SERVER_FILE"
+
+    run _find_git_server
+    [ "$status" -eq 1 ]
+    [ -z "$output" ]
+    [ ! -f "$GIT_SERVER_FILE" ]
+}
+
+@test "_find_git_server: stops at first match (does not continue scanning)" {
+    local call_log="$BATS_TEST_TMPDIR/ssh_scan.log"
+    ssh_cmd() {
+        echo "$1" >> "$call_log"
+        [[ "$1" == "dev1.fleet.test" ]] && return 0
+        return 1
+    }
+    export -f ssh_cmd
+    rm -f "$GIT_SERVER_FILE"
+
+    run _find_git_server
+    [ "$status" -eq 0 ]
+    # Only dev1.fleet.test should have been probed (it matched immediately)
+    [ "$(wc -l < "$call_log")" -eq 1 ]
+    grep -q "dev1.fleet.test" "$call_log"
+}
+
+@test "_find_git_server: overwrites stale cache with newly found server" {
+    echo "old.server.test" > "$GIT_SERVER_FILE"
+    ssh_cmd() {
+        [[ "$1" == "prod1.fleet.test" ]] && return 0
+        return 1
+    }
+    export -f ssh_cmd
+
+    run _find_git_server
+    [ "$status" -eq 0 ]
+    [ "$(cat "$GIT_SERVER_FILE")" = "prod1.fleet.test" ]
+}
