@@ -49,12 +49,13 @@ test-integration:
 coverage:
 	@echo "=== Coverage (kcov + bats) ==="
 	@rm -rf $(COVERAGE_DIR)/
-	@mkdir -p $(COVERAGE_DIR)
+	@mkdir -p $(COVERAGE_DIR) $(TEST_REPORT_DIR)
 	@kcov \
 		--include-path=scripts/,install.sh \
 		--bash-parse-files-in-dir=scripts/ \
 		--exclude-path=old/,scripts/internal/migrations/ \
 		$(COVERAGE_DIR)/ \
-		bats --jobs $(BATS_JOBS) --recursive tests/
+		bats --jobs $(BATS_JOBS) --recursive \
+		     --report-formatter junit --output $(TEST_REPORT_DIR) tests/
 	@echo ""
 	@echo "  Report → $(COVERAGE_DIR)/index.html"
