@@ -161,7 +161,26 @@ _selfupdate_local() {
 
     section "Synchronization"
     echo ""
-    bash "$SCRIPTS_DIR/bin/fleetman" sync
+    bash "$SCRIPTS_DIR/bin/fleetman" sync --quick
+}
+
+# ── Case 2 helper ─────────────────────────────────────────────────────────────
+
+# Scans all servers from config.json for one that holds the git clone.
+# On success: prints the server FQDN, caches it to GIT_SERVER_FILE, returns 0.
+# On failure: returns 1 with no output and no cache write.
+_find_git_server() {
+    local _s
+    while IFS= read -r _s; do
+        # shellcheck disable=SC2016
+        if ssh_cmd "$_s" '[[ -d "${FLEETMAN_DIR:-$HOME/fleetman}/.git" ]]' 2>/dev/null; then
+            ok "Git clone found on $(short_name "$_s")"
+            echo "$_s" > "$GIT_SERVER_FILE"
+            echo "$_s"
+            return 0
+        fi
+    done < <(jq -r '.servers[] | .[]' "$CONFIG_FILE")
+    return 1
 }
 
 # Parses the captured SSH output from a remote git update and acts on the result.
@@ -191,7 +210,7 @@ _parse_remote_result() {
             section "Synchronization"
             echo ""
             ssh_cmd "$git_server" \
-                "bash \"\${FLEETMAN_DIR:-\$HOME/fleetman}/scripts/bin/fleetman\" sync"
+                "bash \"\${FLEETMAN_DIR:-\$HOME/fleetman}/scripts/bin/fleetman\" sync --quick"
             ;;
         FAILED:*)
             err "Update failed — $_detail"
@@ -242,25 +261,37 @@ cmd_selfupdate() {
         return
     fi
 
-    # ── Case 2: read cached git clone server ──────────────────────────────────
+    # ── Case 2: find git clone server (cache or fleet scan) ───────────────────
     section "Searching for the git clone"
     echo ""
 
-    if [[ ! -s "$GIT_SERVER_FILE" ]]; then
-        err "Git clone server not cached — run 'fleetman sync' first from the server holding the git clone"
-        unset PASSWORD
-        exit 1
+    local _git_server=""
+
+    if [[ -s "$GIT_SERVER_FILE" ]]; then
+        local _cached
+        _cached=$(< "$GIT_SERVER_FILE")
+        # shellcheck disable=SC2016
+        if ssh_cmd "$_cached" '[[ -d "${FLEETMAN_DIR:-$HOME/fleetman}/.git" ]]' 2>/dev/null; then
+            _git_server="$_cached"
+            ok "Git clone server (cached): $(short_name "$_git_server")"
+            echo ""
+        else
+            warn "Cached server $(short_name "$_cached") unreachable or git clone missing — scanning fleet..."
+            echo ""
+        fi
+    else
+        warn "Git clone server not cached — scanning fleet..."
+        echo ""
     fi
-    local _git_server
-    _git_server=$(< "$GIT_SERVER_FILE")
-    ok "Git clone server (cached): $(short_name "$_git_server")"
-    echo ""
-    # shellcheck disable=SC2016
-    if ! ssh_cmd "$_git_server" '[[ -d "${FLEETMAN_DIR:-$HOME/fleetman}/.git" ]]' 2>/dev/null; then
-        err "Cached server $(short_name "$_git_server") unreachable or git clone missing"
-        echo "  Re-run 'fleetman sync' from the server holding the git clone"
-        unset PASSWORD
-        exit 1
+
+    if [[ -z "$_git_server" ]]; then
+        _git_server=$(_find_git_server)
+        if [[ -z "$_git_server" ]]; then
+            err "No server with git clone found in fleet"
+            unset PASSWORD
+            exit 1
+        fi
+        echo ""
     fi
 
     section "Update from $(short_name "$_git_server")"
