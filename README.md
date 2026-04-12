@@ -37,12 +37,13 @@ curl -fsSL https://raw.githubusercontent.com/jafou2004/fleetman/main/install.sh 
 
 This will:
 1. Clone the repository into `~/fleetman/`
-2. Create a symlink `~/scripts → ~/fleetman/scripts/`
-3. Run the interactive wizard to create `~/config.json`
-4. Generate a fleet RSA key pair (`~/.ssh/fleet_key`)
-5. Encrypt the shared SSH/sudo password (`~/.fleet_pass.enc`)
-6. Deploy the key and encrypted password to all servers
-7. Offer to run `sync` immediately
+2. Check out the latest semver release tag
+3. Create a symlink `~/scripts → ~/fleetman/scripts/`
+4. Run the interactive wizard to create `~/config.json`
+5. Generate a fleet RSA key pair (`~/.ssh/fleet_key`)
+6. Encrypt the shared SSH/sudo password (`~/.fleet_pass.enc`)
+7. Deploy the key and encrypted password to all servers
+8. Offer to run `sync` immediately
 
 **Custom install directory or repository:**
 
@@ -55,6 +56,8 @@ FLEETMAN_DIR=~/mydir FLEETMAN_REPO=https://github.com/<MY_FORK>/fleetman.git \
 
 ```bash
 git clone https://github.com/jafou2004/fleetman.git ~/fleetman
+# Pin to the latest release (mirrors selfupdate default behaviour)
+git -C ~/fleetman checkout "$(git -C ~/fleetman tag -l 'v[0-9]*.[0-9]*.[0-9]*' | sort -V | tail -1)"
 ln -s ~/fleetman/scripts ~/scripts
 bash ~/fleetman/install.sh
 ```
