@@ -1,13 +1,13 @@
 #!/usr/bin/env bats
-# Unit tests for scripts/internal/run_migrations.sh
+# Unit tests for run_migrations.sh
 
-load '../../test_helper/common'
+load '../test_helper/common'
 
 setup() {
     export PATH="$BATS_TEST_TMPDIR/bin:$PATH"
     mkdir -p "$BATS_TEST_TMPDIR/bin"
     load_common
-    source "$SCRIPTS_DIR/internal/run_migrations.sh"
+    source "$PROJECT_ROOT/run_migrations.sh"
     # Override _MIGRATIONS_DIR to a test-controlled location
     _MIGRATIONS_DIR="$BATS_TEST_TMPDIR/migrations"
     mkdir -p "$_MIGRATIONS_DIR"

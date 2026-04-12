@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Migration runner for fleetman upgrades.
-# Finds and executes migration scripts in internal/migrations/ for versions
+# Finds and executes migration scripts in migrations/ for versions
 # strictly between old_ver (exclusive) and new_ver (inclusive).
 # Each migration file is named vX.Y.Z.sh and run in ascending version order.
 # Migration scripts may be interactive; they always run with a TTY when called
@@ -11,7 +11,7 @@
 #   old_version  Version before the update  (e.g. "1.0.0" or "v1.0.0")
 #   new_version  Version after the update   (e.g. "1.1.0" or "v1.1.0")
 
-_LIB="$(dirname "${BASH_SOURCE[0]}")/../lib"
+_LIB="$(dirname "${BASH_SOURCE[0]}")/scripts/lib"
 # shellcheck source=scripts/lib/vars.sh
 source "$_LIB/vars.sh"
 # shellcheck source=scripts/lib/display.sh
