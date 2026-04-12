@@ -1,7 +1,7 @@
 # fleetman
+[![GitHub Release](https://img.shields.io/github/v/release/jafou2004/fleetman?sort=semver&color=blue)](https://github.com/jafou2004/fleetman/releases/latest)
 [![codecov](https://codecov.io/github/jafou2004/fleetman/graph/badge.svg?token=epAhdFg6wI)](https://codecov.io/github/jafou2004/fleetman)
-[![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/jafou2004/fleetman/ci.yml?logo=githubactions)
-](https://github.com/jafou2004/fleetman/actions/workflows/ci.yml)
+[![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/jafou2004/fleetman/ci.yml?logo=githubactions)](https://github.com/jafou2004/fleetman/actions/workflows/ci.yml)
 [![GitHub License](https://img.shields.io/github/license/jafou2004/fleetman)](https://github.com/jafou2004/fleetman/blob/main/LICENSE)
 
 Shell tooling to manage a fleet of remote Linux servers: synchronize bash configuration, deploy git repositories, and operate Docker containers — all via SSH.
