@@ -607,9 +607,15 @@ EOF
 }
 
 # ── Bootstrap ──────────────────────────────────────────────────────────────────
-# The bootstrap block triggers when $0 is not a file (bash reads from
-# a pipe). Tested via: bash -c "cat install.sh | bash"
-# Tests target early outputs (before the final exec).
+# The bootstrap block triggers when $0 is not a file.
+# Two invocation styles:
+#   cat install.sh | bash  — $0="bash" (not a file) ✓, but read -r competes with
+#                            bash's character-at-a-time stdin reading; use ONLY
+#                            for tests that exit before the first read call
+#                            (dependency check, symlink error).
+#   bash -c "$(cat ...)"   — $0="bash" (not a file) ✓, stdin is /dev/null so
+#                            read gets EOF immediately (empty → defaults); use for
+#                            tests that exercise the clone + tag checkout path.
 
 @test "bootstrap: fails if a dependency is missing" {
     # Hide sshpass (last in the list) — other dependencies are
@@ -619,6 +625,69 @@ EOF
     mv "$BATS_TEST_TMPDIR/bin/sshpass.bak" "$BATS_TEST_TMPDIR/bin/sshpass"
     [ "$status" -ne 0 ]
     [[ "$output" == *"Missing requirement"*"sshpass"* ]]
+}
+
+@test "bootstrap: checks out latest semver tag after clone" {
+    local fake_dir="$BATS_TEST_TMPDIR/fresh_repo"
+    export FLEETMAN_DIR="$fake_dir"
+    local git_calls="$BATS_TEST_TMPDIR/git_calls"
+
+    # Pre-create stub install.sh so exec succeeds after clone
+    mkdir -p "$fake_dir"
+    printf '#!/bin/bash\nexit 0\n' > "$fake_dir/install.sh"
+
+    cat > "$BATS_TEST_TMPDIR/bin/git" << EOF
+#!/bin/bash
+echo "GIT_CALL:\$*" >> "$git_calls"
+if [[ "\$1" == "clone" ]]; then
+    mkdir -p "$fake_dir/.git"
+    exit 0
+elif [[ "\$1" == "-C" && "\$3" == "tag" ]]; then
+    echo "v1.0.0"
+    echo "v1.2.3"
+    echo "v1.1.0"
+    exit 0
+fi
+exit 0
+EOF
+    chmod +x "$BATS_TEST_TMPDIR/bin/git"
+
+    # bash -c "$(cat ...)" avoids the stdin conflict:
+    # read -r inside the clone block gets EOF → empty → defaults kept
+    # shellcheck disable=SC2046,SC2086
+    run bash -c "$(cat "$PROJECT_ROOT/install.sh")"
+
+    [[ "$output" == *"Checked out latest release: v1.2.3"* ]]
+    grep -q "checkout.*v1.2.3" "$git_calls"
+}
+
+@test "bootstrap: stays on default branch when no semver tags exist" {
+    local fake_dir="$BATS_TEST_TMPDIR/fresh_repo_notag"
+    export FLEETMAN_DIR="$fake_dir"
+    local git_calls="$BATS_TEST_TMPDIR/git_calls"
+
+    mkdir -p "$fake_dir"
+    printf '#!/bin/bash\nexit 0\n' > "$fake_dir/install.sh"
+
+    cat > "$BATS_TEST_TMPDIR/bin/git" << EOF
+#!/bin/bash
+echo "GIT_CALL:\$*" >> "$git_calls"
+if [[ "\$1" == "clone" ]]; then
+    mkdir -p "$fake_dir/.git"
+    exit 0
+elif [[ "\$1" == "-C" && "\$3" == "tag" ]]; then
+    # No tags — output nothing
+    exit 0
+fi
+exit 0
+EOF
+    chmod +x "$BATS_TEST_TMPDIR/bin/git"
+
+    # shellcheck disable=SC2046,SC2086
+    run bash -c "$(cat "$PROJECT_ROOT/install.sh")"
+
+    [[ "$output" == *"No semver tag found"* ]]
+    ! grep -q "checkout" "$git_calls" 2>/dev/null
 }
 
 @test "bootstrap: fails if ~/scripts is a real directory" {

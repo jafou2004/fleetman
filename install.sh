@@ -29,6 +29,15 @@ if [[ ! -f "$0" ]]; then
 
         git clone "$_REPO_URL" "$_PROJECT_DIR" || exit 1
         echo "  ✓ Cloned in $_PROJECT_DIR"
+
+        # Checkout the latest semver tag (mirrors selfupdate default: track="tags")
+        _latest_tag=$(git -C "$_PROJECT_DIR" tag -l 'v[0-9]*.[0-9]*.[0-9]*' | sort -V | tail -1)
+        if [[ -n "$_latest_tag" ]]; then
+            git -C "$_PROJECT_DIR" checkout "$_latest_tag" --quiet
+            echo "  ✓ Checked out latest release: $_latest_tag"
+        else
+            echo "  ⚠ No semver tag found — staying on default branch"
+        fi
     else
         echo "  ⚠ Repository already present in $_PROJECT_DIR — clone skipped"
     fi
