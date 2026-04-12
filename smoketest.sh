@@ -5,7 +5,7 @@
 # Runs safe read-only commands automatically (with timing and pass/fail),
 # then prints a manual test checklist for commands that cannot be automated.
 #
-# Usage: bash scripts/internal/smoketest.sh [--plan] [--env <env>] [--timeout <secs>]
+# Usage: bash smoketest.sh [--plan] [--env <env>] [--timeout <secs>]
 #
 # Options:
 #   --plan             Print only the manual checklist (no tests executed)
@@ -14,7 +14,7 @@
 #   -h, --help         Show this help
 ##
 
-_LIB="$(dirname "${BASH_SOURCE[0]}")/../lib"
+_LIB="$(dirname "${BASH_SOURCE[0]}")/scripts/lib"
 # shellcheck source=scripts/lib/vars.sh
 source "$_LIB/vars.sh"
 # shellcheck source=scripts/lib/display.sh

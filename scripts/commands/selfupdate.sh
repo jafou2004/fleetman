@@ -157,7 +157,7 @@ _selfupdate_local() {
     local _new_ver
     _new_ver=$(cat "$pdir/scripts/internal/VERSION" 2>/dev/null || echo "0.0.0")
     echo ""
-    bash "$SCRIPTS_DIR/internal/run_migrations.sh" "$_old_ver" "$_new_ver"
+    bash "$pdir/run_migrations.sh" "$_old_ver" "$_new_ver"
 
     section "Synchronization"
     echo ""
@@ -204,7 +204,7 @@ _parse_remote_result() {
             echo ""
             # Phase B: migrations via ssh -t (interactive, full TTY)
             ssh_cmd -t "$git_server" \
-                "bash \"\${FLEETMAN_DIR:-\$HOME/fleetman}/scripts/internal/run_migrations.sh\" '$_old_ver' '$_new_ver'"
+                "bash \"\${FLEETMAN_DIR:-\$HOME/fleetman}/run_migrations.sh\" '$_old_ver' '$_new_ver'"
             # Phase C: sync triggered from the git server (source of truth)
             echo ""
             section "Synchronization"

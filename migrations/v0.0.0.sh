@@ -11,12 +11,12 @@
 #   - Via "ssh -t" when the git clone is on a remote server
 # Interactive prompts (read, select_menu, etc.) work in both cases.
 #
-# Sourcing libs (optional — use relative path from scripts/internal/migrations/):
-#   _LIB="$(dirname "${BASH_SOURCE[0]}")/../../lib"
+# Sourcing libs (optional — use relative path from migrations/):
+#   _LIB="$(dirname "${BASH_SOURCE[0]}")/../scripts/lib"
 #   source "$_LIB/display.sh"   # ok, err, warn, section
 #   source "$_LIB/ui.sh"        # select_menu, prompt_response
 
-_LIB="$(dirname "${BASH_SOURCE[0]}")/../../lib"
+_LIB="$(dirname "${BASH_SOURCE[0]}")/../scripts/lib"
 # shellcheck source=scripts/lib/vars.sh
 source "$_LIB/vars.sh"
 # shellcheck source=scripts/lib/display.sh

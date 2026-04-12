@@ -1,7 +1,7 @@
 #!/usr/bin/env bats
-# Unit tests for scripts/internal/smoketest.sh
+# Unit tests for smoketest.sh
 
-load '../../test_helper/common'
+load '../test_helper/common'
 
 setup() {
     export PATH="$BATS_TEST_TMPDIR/bin:$PATH"
@@ -21,7 +21,7 @@ EOF
     touch "$HOME/.ssh/fleet_key"
     export FLEET_KEY="$HOME/.ssh/fleet_key"
 
-    source "$SCRIPTS_DIR/internal/smoketest.sh"
+    source "$PROJECT_ROOT/smoketest.sh"
 
     # Re-mock after sourcing
     ask_password() { PASSWORD="testpass"; B64_PASS="dGVzdHBhc3M="; }
