@@ -45,8 +45,9 @@ Shell tooling to manage a fleet of remote servers: synchronize bash configuratio
 | `scripts/commands/config/env/color.sh` | `cmd_config_env_color` — changes the color of an existing environment; menu 1: env selection (bg-colored labels); menu 2: color picker (bg-colored, preselects current color via index lookup in `COLOR_NAMES`); atomic write to `.env_colors`; sync confirm |
 | `scripts/commands/config/server.sh` | `cmd_config_server` — interactive menu dispatching `config/server/*.sh` sub-commands via `_cli_dispatch_submenu`; `@order 5` in config menu |
 | `scripts/commands/config/server/add.sh` | `cmd_config_server_add` — adds a new server FQDN to `config.json .servers[$env]`; selects env via colored menu; validates FQDN (regex, re-prompt loop) and checks for global duplicates across all envs; always bootstraps the new server via `_bootstrap_key`: decrypts fleet password, runs `ssh-copy-id`, verifies key auth, launches `fleetman sync` |
-| `scripts/internal/run_migrations.sh` | Standalone migration runner — `main <old_ver> <new_ver>`; finds `migrations/vX.Y.Z.sh` in `]old, new]` window; `main()` pattern with main guard |
-| `scripts/internal/migrations/` | Migration scripts — `vX.Y.Z.sh` naming; sourced with TTY (locally or via `ssh -t`); can source `../../lib/` |
+| `run_migrations.sh` | Standalone migration runner (project root, git clone server only) — `main <old_ver> <new_ver>`; finds `migrations/vX.Y.Z.sh` in `]old, new]` window; `main()` pattern with main guard; NOT synced to fleet servers |
+| `migrations/` | Migration scripts (project root, git clone server only) — `vX.Y.Z.sh` naming; sourced with TTY (locally or via `ssh -t`); can source `../scripts/lib/`; NOT synced to fleet servers |
+| `smoketest.sh` | Hybrid smoke test (project root, git clone server only) — runs read-only CLI commands automatically + prints manual checklist; NOT synced to fleet servers |
 | `scripts/lib/vars.sh` | Global variables: colors (`GREEN/RED/YELLOW/BLUE/CYAN/NC`), `CONFIG_FILE`, `MASTER_HOST` (read from `~/.data/fqdn` if present, otherwise `hostname -f` as fallback), `FLEET_KEY`, `FLEET_PASS_FILE`, `DATA_DIR`, `PODS_FILE`, `PODS_DIR`, `SCRIPTS_DIR`, `USER_ALIASES_FILE` |
 | `scripts/lib/display.sh` | `ok/err/warn/section/print_summary/short_name/compute_title` |
 | `scripts/lib/auth.sh` | `require_cmd/sudo_run/check_sshpass/ask_password/ssh_cmd/scp_cmd/rsync_cmd/encrypt_password/prompt_pass_and_encrypt` |
@@ -214,7 +215,7 @@ jq -r --arg pod "service-docker" '.[] | to_entries[] | select(.value[] == $pod) 
 
 **Adding a new command**: for fleet-wide operations (same action on every server), define `cmd_<name>()` that calls `*_local()`/`*_remote()` + `iterate_servers`. For directional commands (find one specific server, act on it), use plain logic without `iterate_servers`.
 
-**selfupdate — directional command pattern**: `cmd_selfupdate` does not use `iterate_servers` — it locates the single server holding the git clone and acts on it. Case 1 (local clone): calls `_update_*` locally then `run_migrations.sh` + `fleetman sync`. Case 2 (remote clone): 3 separate SSH calls — heredoc (git update, captures `OLD_VER`/`NEW_VER`/marker), `ssh_cmd -t` (migrations, fully interactive), SSH (sync from git server).
+**selfupdate — directional command pattern**: `cmd_selfupdate` does not use `iterate_servers` — it locates the single server holding the git clone and acts on it. Case 1 (local clone): calls `_update_*` locally then `$pdir/run_migrations.sh` + `fleetman sync`. Case 2 (remote clone): 3 separate SSH calls — heredoc (git update, captures `OLD_VER`/`NEW_VER`/marker), `ssh_cmd -t` (`$FLEETMAN_DIR/run_migrations.sh`, fully interactive), SSH (sync from git server).
 
 **Detached HEAD after tag checkout**: `git checkout <tag>` leaves the repo in detached HEAD — `@{u}` is undefined, so `rev-list HEAD..@{u}` silently returns 0. Detect with `git symbolic-ref --quiet HEAD` (exit 1 = detached); checkout the configured branch before any pull. Applied in `_update_commits <pdir> <branch>`.
 
@@ -251,9 +252,10 @@ jq -r --arg pod "service-docker" '.[] | to_entries[] | select(.value[] == $pod) 
 **Bats Core** is used for unit and integration tests (WSL or Docker):
 - `bats --recursive tests/` — run all tests (requires `--recursive` for subdirectory discovery)
 - `make test` / `make test-unit` / `make test-integration` — Docker-based equivalents
-- `make coverage` — runs tests under **kcov** (`sudo apt install kcov`), outputs `coverage/index.html`
+- `make coverage` — runs tests under **kcov** (`sudo apt install kcov`), outputs coverage HTML (`reports/coverage/`) **and** junit report (`reports/tests/`) in one pass; kcov correctly propagates bats exit code (exit 1 on failure)
 - All `make test*` targets run parallel jobs (`BATS_JOBS`, auto-detected via `nproc`, default 4); parallelism is at the file level (36 files); override: `make test BATS_JOBS=1` to debug flaky tests serially
-- Migration scripts (`migrations/vX.Y.Z.sh`) do **not** have unit tests — they are one-shot; the runner (`run_migrations.sh`) and its window logic are already covered in `tests/unit/internal/run_migrations.bats`.
+- CI triggers on `pull_request` (all branches) and `push` to `main` only — feature branch pushes without a PR do not trigger CI
+- Migration scripts (`migrations/vX.Y.Z.sh`) do **not** have unit tests — they are one-shot; the runner (`run_migrations.sh`) and its window logic are already covered in `tests/unit/run_migrations.bats`.
 
 **Test structure** (`tests/`) — to be rebuilt for new architecture:
 - `test_helper/common.bash` — `load_common()` (unit tests): sets `HOME=$BATS_TEST_TMPDIR`, copies fixtures, sources lib files; `setup_fixtures()` (integration tests): same but does not source libs
