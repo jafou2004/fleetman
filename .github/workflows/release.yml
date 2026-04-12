@@ -118,7 +118,7 @@ jobs:
           echo "$RELEASE" > scripts/internal/VERSION
           git add scripts/internal/VERSION CHANGELOG.md
           git commit -m "chore: release v$RELEASE"
-          git tag "v$RELEASE"
+          git tag -a "v$RELEASE" -m "Release v$RELEASE"
 
       - name: Commit next dev version
         run: |
