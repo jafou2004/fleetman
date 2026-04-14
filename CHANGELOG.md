@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `install.sh`: fix `curl-pipe-bash` bootstrap — `read` now uses `< /dev/tty` to avoid consuming script lines as user input
+
 ## [0.0.1] - 2026-04-12
 
 ### Added

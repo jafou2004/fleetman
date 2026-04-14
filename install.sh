@@ -23,9 +23,9 @@ if [[ ! -f "$0" ]]; then
 
     if [[ ! -d "$_PROJECT_DIR/.git" ]]; then
         printf "  Git repository URL [%s] : " "$_REPO_URL"
-        read -r _input; [[ -n "$_input" ]] && _REPO_URL="$_input"
+        read -r _input < /dev/tty; [[ -n "$_input" ]] && _REPO_URL="$_input"
         printf "  Installation directory [%s] : " "$_PROJECT_DIR"
-        read -r _input; [[ -n "$_input" ]] && _PROJECT_DIR="$_input"
+        read -r _input < /dev/tty; [[ -n "$_input" ]] && _PROJECT_DIR="$_input"
 
         git clone "$_REPO_URL" "$_PROJECT_DIR" || exit 1
         echo "  ✓ Cloned in $_PROJECT_DIR"
@@ -54,7 +54,7 @@ if [[ ! -f "$0" ]]; then
     fi
 
     export FLEETMAN_DIR="$_PROJECT_DIR"
-    exec bash "$_PROJECT_DIR/install.sh" "$@"
+    exec bash "$_PROJECT_DIR/install.sh" "$@" < /dev/tty
 fi
 # ── Fin bootstrap ──────────────────────────────────────────────────────────────
 
