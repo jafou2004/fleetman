@@ -261,7 +261,7 @@ EOF
 
 @test "_wizard_create_config: created config contains required keys" {
     rm -f "$CONFIG_FILE"
-    exec 9< <(printf '/opt/pods\n\n4\n\n0\n\ndev\ndev1.fleet.test\n\n')
+    exec 9< <(printf '/opt/pods\n\n4\n\n0\n\n\n\ndev\ndev1.fleet.test\n\n')
     prompt_response() {
         local response=""
         while [[ -z "$response" ]]; do
@@ -284,7 +284,7 @@ EOF
 
 @test "_wizard_create_config: welcome.enabled=false when response is 'n'" {
     rm -f "$CONFIG_FILE"
-    exec 9< <(printf '/opt/pods\n\n4\n\n0\nn\ndev\ndev1.fleet.test\n\n')
+    exec 9< <(printf '/opt/pods\n\n4\n\n0\n\n\nn\ndev\ndev1.fleet.test\n\n')
     prompt_response() {
         local response=""
         while [[ -z "$response" ]]; do

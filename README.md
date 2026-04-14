@@ -88,6 +88,7 @@ cp ~/fleetman/config.json.example ~/config.json
 | `welcome` | object | Welcome screen flags: `enabled`, `show_pods`, `show_os`, `show_docker` |
 | `template_vars` | object | Custom tokens for `.env` templates (see [env_templates](#env_templates)) |
 | `pods` | object | Per-pod configuration: `env_vars` and `env_templates` |
+| `port_range` | object | Port scanning bounds for `fleetman port` commands: `{ "min": N, "max": N }` |
 
 ### Example
 
@@ -151,6 +152,19 @@ fleetman pod env cp -p myapp         # Propagate .env to all servers hosting the
 
 `fleetman pod env cp` applies per-server template substitution before copying (see [env_templates](#env_templates)).
 
+### Port commands
+
+```bash
+fleetman port next                   # Next 5 free external ports in the configured range
+fleetman port next -n 10             # Next 10 free ports
+fleetman port list                   # All used external ports across all servers/envs
+fleetman port list -e prod           # Filter by environment
+fleetman port check 8080             # Check whether port 8080 is free
+fleetman port check 8080 8443 9000   # Check multiple ports at once
+```
+
+Ports are scanned across all environments and servers so a port reserved in `dev` is not proposed in `prod`. The scanning range is configured via `config.json` `port_range`.
+
 ### Config commands (interactive)
 
 ```bash
@@ -167,6 +181,7 @@ fleetman config podsignore    # Manage pods_ignore patterns
 fleetman config basefolder    # Set the default working directory on SSH login
 fleetman config autosync      # Toggle auto-sync after config changes
 fleetman config updatepassword  # Rotate the fleet SSH/sudo password
+fleetman config portrange       # Configure the port scanning range (min/max)
 ```
 
 ## env_templates

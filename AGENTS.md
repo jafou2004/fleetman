@@ -62,7 +62,13 @@ Shell tooling to manage a fleet of remote servers: synchronize bash configuratio
 | `.data/welcome_<short>.ascii` | Generated — 2-line braille art per server, produced by `fleetman sync` Phase 1a (gitignored) |
 | `.data/last_sync.txt` | Generated — date of last sync run (`YYYY-MM-DD HH:MM`), written by `fleetman sync` (gitignored) |
 | `.data/fqdn` | Generated — FQDN of the current server, written by `sync_local` (master) and via SSH in `sync_remote` after copying `.data/` (each remote overwrites the master's FQDN copied by scp); read by `vars.sh` as `MASTER_HOST` cache to avoid `hostname -f` on every invocation (gitignored) |
-| `.data/services.json` | Generated — `{ env: { server: { pod: [{"Service": "name"}, ...] } } }` produced by `fleetman sync -f` (Phase 1c); read by `pod/logs.sh` `-s` interactive menu; query: `jq '.[$e][$srv][$pod][].Service'`; gitignored |
+| `.data/services.json` | Generated — `{ env: { server: { pod: [{"Service": "name", "Publishers": [{"PublishedPort": N, "TargetPort": N, "Protocol": "tcp"}]} ...] } } }` produced by `fleetman sync -f` (Phase 1c); read by `pod/logs.sh` `-s` interactive menu and `scripts/lib/ports.sh`; query: `jq '.[$e][$srv][$pod][].Service'`; gitignored |
+| `scripts/lib/ports.sh` | Port-related helpers: `check_services_file` (guards on `.data/services.json` presence), `_port_read_range` (reads `config.json .port_range.{min,max}`, `_port_collect_used` (flattens `services.json` into `[{port,pod,service,env,server}]` array); idempotency guard `_FLEETMAN_PORTS_LOADED` |
+| `scripts/commands/port.sh` | `cmd_port` — dispatcher for `fleetman port` sub-commands via `_cli_dispatch_submenu` |
+| `scripts/commands/port/next.sh` | `cmd_port_next` — lists next N free external ports in the `port_range` considering all servers/envs; default N=5, override with `-n X`; @order 1 |
+| `scripts/commands/port/list.sh` | `cmd_port_list` — lists all used external ports across all servers/envs; shows pod/service, env, short server names per port; optional `-e <env>` filter; @order 2 |
+| `scripts/commands/port/check.sh` | `cmd_port_check` — checks whether one or more port numbers are free; `✓ free` (exit 0) or `✗ used by pod/service [env] servers` (exit 1); validates positive integers; @order 3 |
+| `scripts/commands/config/portrange.sh` | `cmd_config_portrange` — reads/updates `config.json .port_range` (min/max); validates [1024,65535] range and min < max; @order 13 |
 
 ## scripts/lib/ — Shared Library
 
@@ -159,6 +165,7 @@ Lib dependency chain: `vars.sh` ← `display.sh` ← `spinner.sh`, `auth.sh`, `c
 - `pods_ignore`: array of PCRE regex strings (optional) — pod names matching any regex are excluded from `pods.json` during `fleetman sync` Phase 1b; applied in `collect_env()` via `jq test()`; absent or `[]` = no filtering
 - `selfupdate`: object (optional) — `{ "track": "tags"|"commits"|"branch", "branch": "main", "pin": "vX.Y.Z" }` — `track` defaults to `"tags"` (latest semver tag via `git checkout`); `"commits"` pulls upstream of current branch; `"branch"` tracks a named branch (`branch` field, default `"main"`); `pin` targets a specific version and overrides `track`
 - `welcome`: object (optional) — `{ "enabled": true, "show_pods": true, "show_os": true, "show_docker": true }` — all flags default to `true` when absent; `enabled: false` causes `fleetman sync` to remove the welcome block from `.bashrc`; the other flags control `render()` column layout in `welcome.sh` (single-column or header-only when sections are disabled)
+- `port_range`: object (optional) — `{ "min": N, "max": N }` — both values are integers in [1024, 65535] with min < max; used by `fleetman port next/list/check` to bound external port scanning; `PublishedPort` values from `services.json` are compared against this range
 - `servers`: object with keys `dev`, `test`, `prod` (arrays of FQDNs, no `user@`)
 
 `jq` query patterns for env iteration:
@@ -190,7 +197,7 @@ jq -r --arg pod "service-docker" '.[] | to_entries[] | select(.value[] == $pod) 
 
 **`commands/*.sh` convention**: expose only `cmd_*()` functions — no `main()`, no top-level executable code, no main guard. The dispatcher calls `cmd_<verb>()` directly.
 
-**Command docblock (help system)**: every `scripts/commands/**/*.sh` must open with a `##`-delimited docblock. The dispatcher reads it for `-h`/`--help` — **no `help()` function, no `h` in getopts**. Regular `# ` comments outside `##` are developer notes and do NOT appear in help. First non-`@tag` content line = short description shown in `fleetman -h` listing. Sub-commands that appear in a parent interactive menu must also include `# @menu <label>` and `# @order <N>` at the top of the docblock — `_cli_extract_desc` and `_cli_cmd_help` skip `# @*` lines so they don't leak into help output. **`@order` values must be unique within a directory** — a collision shifts all subsequent menu indices, breaking `SELECTED_IDX` assertions in `tests/unit/commands/config.bats`. Current `config/` order: parallel=1, status=2, podsignore=3, autosync=4, env=5, server=6, templatevars=7, welcome=8, basefolder=9, selfupdate=10, pod=11, updatepassword=12.
+**Command docblock (help system)**: every `scripts/commands/**/*.sh` must open with a `##`-delimited docblock. The dispatcher reads it for `-h`/`--help` — **no `help()` function, no `h` in getopts**. Regular `# ` comments outside `##` are developer notes and do NOT appear in help. First non-`@tag` content line = short description shown in `fleetman -h` listing. Sub-commands that appear in a parent interactive menu must also include `# @menu <label>` and `# @order <N>` at the top of the docblock — `_cli_extract_desc` and `_cli_cmd_help` skip `# @*` lines so they don't leak into help output. **`@order` values must be unique within a directory** — a collision shifts all subsequent menu indices, breaking `SELECTED_IDX` assertions in `tests/unit/commands/config.bats`. Current `config/` order: parallel=1, status=2, podsignore=3, autosync=4, env=5, server=6, templatevars=7, welcome=8, basefolder=9, selfupdate=10, pod=11, updatepassword=12, portrange=13.
 ```bash
 ##
 # @menu Short menu label

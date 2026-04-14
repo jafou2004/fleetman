@@ -140,6 +140,31 @@ _wizard_create_config() {
         wud_port="${wud_port:-3000}"
     done
 
+    # ── Port range ────────────────────────────────────────────────────────────
+
+    local port_min="" port_max=""
+    echo ""
+    echo "  Port range for fleet services (used by 'fleetman port next/list/check')"
+    printf "  Min port (Enter to skip) ? "
+    read -r port_min
+    printf "  Max port (Enter to skip) ? "
+    read -r port_max
+
+    local _port_range_json="{}"
+    if [ -n "$port_min" ] && [ -n "$port_max" ]; then
+        if [[ "$port_min" =~ ^[0-9]+$ ]] && [[ "$port_max" =~ ^[0-9]+$ ]] \
+                && (( port_min >= 1024 )) && (( port_min <= 65535 )) \
+                && (( port_max >= 1024 )) && (( port_max <= 65535 )) \
+                && (( port_min < port_max )); then
+            _port_range_json=$(jq -n --argjson min "$port_min" --argjson max "$port_max" \
+                '{"port_range": {"min": $min, "max": $max}}')
+        else
+            warn "Invalid port range — skipped. Configure later with 'fleetman config portrange'"
+        fi
+    else
+        echo "  ℹ Port range not configured — run 'fleetman config portrange' to set it up"
+    fi
+
     # ── Welcome screen ────────────────────────────────────────────────────────
 
     local welcome_enabled_raw welcome_enabled welcome_json
@@ -246,6 +271,7 @@ _wizard_create_config() {
         --argjson status_checks "$status_checks_json" \
         --argjson welcome "$welcome_json" \
         --argjson servers "$servers_json" \
+        --argjson port_range "$_port_range_json" \
         '{
             "parallel": $parallel,
             "pods_dir": $pods_dir,
@@ -254,7 +280,8 @@ _wizard_create_config() {
             "welcome": $welcome,
             "pods": {},
             "servers": $servers
-        } + (if $base_folder != "" then {"base_folder": $base_folder} else {} end)')
+        } + (if $base_folder != "" then {"base_folder": $base_folder} else {} end)
+          + $port_range')
 
     echo ""
     if ! printf '%s\n' "$config_json" > "$CONFIG_FILE"; then
