@@ -20,6 +20,7 @@ load_common() {
     mkdir -p "$HOME/.data" "$HOME/.ssh"
     cp "$FIXTURES_DIR/config.json" "$CONFIG_FILE"
     cp "$FIXTURES_DIR/pods.json"   "$PODS_FILE"
+    [ -f "$FIXTURES_DIR/services.json" ] && cp "$FIXTURES_DIR/services.json" "$HOME/.data/services.json"
     # Create symlink ~/scripts → real scripts/ directory
     # Required because vars.sh defines SCRIPTS_DIR="$HOME/scripts"
     ln -sf "$_REAL_SCRIPTS_DIR" "$HOME/scripts" 2>/dev/null || true
@@ -44,5 +45,6 @@ setup_fixtures() {
     mkdir -p "$HOME/.data" "$HOME/.ssh"
     cp "$FIXTURES_DIR/config.json" "$CONFIG_FILE"
     cp "$FIXTURES_DIR/pods.json"   "$PODS_FILE"
+    [ -f "$FIXTURES_DIR/services.json" ] && cp "$FIXTURES_DIR/services.json" "$HOME/.data/services.json"
     export SCRIPTS_DIR="$_REAL_SCRIPTS_DIR"
 }

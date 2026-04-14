@@ -1,25 +1,50 @@
 {
   "dev": {
     "dev1.fleet.test": {
-      "api":    [{"Service": "web"}, {"Service": "db"}],
-      "worker": [{"Service": "app"}]
+      "api": [
+        {"Service": "web", "State": "running", "Health": "", "Status": "Up 2 days",
+         "Publishers": [{"PublishedPort": 8080, "TargetPort": 80, "Protocol": "tcp"}]},
+        {"Service": "db",  "State": "running", "Health": "", "Status": "Up 2 days",
+         "Publishers": [{"PublishedPort": 9000, "TargetPort": 5432, "Protocol": "tcp"}]}
+      ],
+      "worker": [
+        {"Service": "app", "State": "running", "Health": "", "Status": "Up 1 day",
+         "Publishers": [{"PublishedPort": 8081, "TargetPort": 8000, "Protocol": "tcp"}]}
+      ]
     },
     "dev2.fleet.test": {
-      "api": [{"Service": "web"}]
+      "api": [
+        {"Service": "web", "State": "running", "Health": "", "Status": "Up 2 days",
+         "Publishers": [{"PublishedPort": 8080, "TargetPort": 80, "Protocol": "tcp"}]}
+      ]
     }
   },
   "test": {
     "test1.fleet.test": {
-      "api":    [{"Service": "web"}, {"Service": "db"}],
-      "worker": [{"Service": "app"}]
+      "api": [
+        {"Service": "web", "State": "running", "Health": "", "Status": "Up 2 days",
+         "Publishers": [{"PublishedPort": 8080, "TargetPort": 80, "Protocol": "tcp"}]},
+        {"Service": "db",  "State": "running", "Health": "", "Status": "Up 2 days",
+         "Publishers": [{"PublishedPort": 9000, "TargetPort": 5432, "Protocol": "tcp"}]}
+      ],
+      "worker": [
+        {"Service": "app", "State": "running", "Health": "", "Status": "Up 1 day",
+         "Publishers": [{"PublishedPort": 8081, "TargetPort": 8000, "Protocol": "tcp"}]}
+      ]
     }
   },
   "prod": {
     "prod1.fleet.test": {
-      "api": [{"Service": "web"}]
+      "api": [
+        {"Service": "web", "State": "running", "Health": "", "Status": "Up 2 days",
+         "Publishers": [{"PublishedPort": 8080, "TargetPort": 80, "Protocol": "tcp"}]}
+      ]
     },
     "prod2.fleet.test": {
-      "worker": [{"Service": "app"}]
+      "worker": [
+        {"Service": "app", "State": "running", "Health": "", "Status": "Up 1 day",
+         "Publishers": [{"PublishedPort": 8081, "TargetPort": 8000, "Protocol": "tcp"}]}
+      ]
     }
   }
 }
