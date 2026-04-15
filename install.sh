@@ -176,7 +176,7 @@ _wizard_create_config() {
     else
         welcome_enabled="true"
     fi
-    echo "  ℹ Fine-grained display options (show_pods, show_os, show_docker) can be configured manually in config.json"
+    echo "  ℹ Fine-grained display options (show_pods, show_os, show_docker) can be configured with 'fleetman config welcome'"
     welcome_json=$(jq -n --argjson enabled "$welcome_enabled" '{"enabled": $enabled}')
 
     # ── Environments ──────────────────────────────────────────────────────────
