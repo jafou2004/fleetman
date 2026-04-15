@@ -652,10 +652,11 @@ exit 0
 EOF
     chmod +x "$BATS_TEST_TMPDIR/bin/git"
 
-    # bash -c "$(cat ...)" avoids the stdin conflict:
-    # read -r inside the clone block gets EOF → empty → defaults kept
-    # shellcheck disable=SC2046,SC2086
-    run bash -c "$(cat "$PROJECT_ROOT/install.sh")"
+    # setsid detaches from the controlling terminal: /dev/tty reads in the
+    # bootstrap clone block return ENXIO (empty) → defaults kept, no blocking.
+    local _content
+    _content=$(cat "$PROJECT_ROOT/install.sh")
+    run setsid bash -c "$_content"
 
     [[ "$output" == *"Checked out latest release: v1.2.3"* ]]
     grep -q "checkout.*v1.2.3" "$git_calls"
@@ -683,8 +684,9 @@ exit 0
 EOF
     chmod +x "$BATS_TEST_TMPDIR/bin/git"
 
-    # shellcheck disable=SC2046,SC2086
-    run bash -c "$(cat "$PROJECT_ROOT/install.sh")"
+    local _content
+    _content=$(cat "$PROJECT_ROOT/install.sh")
+    run setsid bash -c "$_content"
 
     [[ "$output" == *"No semver tag found"* ]]
     ! grep -q "checkout" "$git_calls" 2>/dev/null
