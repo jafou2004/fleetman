@@ -116,12 +116,6 @@ EOF
     grep -q 'PATH.*scripts/bin' "$DATA_DIR/fleetman.sh"
 }
 
-@test "sync_local: affiche 'internal/*.sh made executable'" {
-    touch "$HOME/.bashrc"
-    run sync_local
-    [[ "$output" == *"internal/*.sh made executable"* ]]
-}
-
 @test "sync_local: writes FQDN cache to DATA_DIR/fqdn" {
     touch "$HOME/.bashrc"
     sync_local

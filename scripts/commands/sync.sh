@@ -473,11 +473,6 @@ sync_local() {
         ok "symlink ~/scripts recreated → $_pdir/scripts"
     fi
 
-    chmod u+x "$SCRIPTS_DIR/bin/fleetman" 2>/dev/null
-    ok "bin/fleetman made executable"
-    chmod u+x "$SCRIPTS_DIR/internal/"*.sh 2>/dev/null
-    ok "internal/*.sh made executable"
-
     hostname -f > "$FQDN_FILE"
     ok "FQDN cached → $FQDN_FILE"
 

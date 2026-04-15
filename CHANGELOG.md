@@ -16,6 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `config.json`: new optional `port_range` key `{ "min": N, "max": N }`
 - `lib/ports.sh` — shared port helpers (`check_services_file`, `_port_read_range`, `_port_collect_used`)
 
+### Changed
+
+- `sync`: executable bit on `bin/fleetman` and `internal/*.sh` tracked by git (`git update-index --chmod=+x`) — `chmod` calls removed from `sync_local`
+
 ## [0.0.2] - 2026-04-14
 
 ### Fixed
