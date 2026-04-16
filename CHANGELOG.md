@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.4] - 2026-04-16
+
 ### Added
 
 - `fleetman ssh` — SSH into any fleet server via an interactive menu; optional `-e <env>` and `-s <shortname-filter>` flags; reads from `config.json .servers`
@@ -18,7 +20,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `sync`: env with empty server list in `config.json` no longer triggers a spurious error line — `_IS_list_servers` now skips iteration when the array is empty
 - `uninstall`: remote servers now uninstalled before local — prevents fleet key deletion from breaking SSH auth to remotes (race condition in parallel mode, ordering issue in sequential mode)
-
 ## [0.0.3] - 2026-04-16
 
 ### Added
