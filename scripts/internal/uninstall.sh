@@ -256,7 +256,7 @@ main() {
 
     section "Uninstalling fleet management [ALL]"
     echo ""
-    iterate_servers uninstall_local uninstall_remote
+    iterate_servers uninstall_local uninstall_remote "" 1
     print_summary
 
     unset PASSWORD

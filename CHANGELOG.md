@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - `sync`: env with empty server list in `config.json` no longer triggers a spurious error line — `_IS_list_servers` now skips iteration when the array is empty
+- `uninstall`: remote servers now uninstalled before local — prevents fleet key deletion from breaking SSH auth to remotes (race condition in parallel mode, ordering issue in sequential mode)
 
 ## [0.0.3] - 2026-04-16
 

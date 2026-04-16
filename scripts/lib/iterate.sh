@@ -112,7 +112,7 @@ _IS_list_servers() {
     local _var="$1"
     if [ -n "$_var" ]; then
         local -n _arr="$_var"
-        [ "${#_arr[@]}" -gt 0 ] && printf '%s\n' "${_arr[@]}" || true
+        if [ "${#_arr[@]}" -gt 0 ]; then printf '%s\n' "${_arr[@]}"; fi
     elif [ -n "$ENV" ]; then
         jq -r --arg env "$ENV" '.servers[$env] | .[]' "$CONFIG_FILE"
     else
@@ -124,11 +124,14 @@ _IS_list_servers() {
 # Calls $1 (no args) for the local server (MASTER_HOST),
 # and $2 "$server" for each remote server.
 # Optional $3: name of a bash array variable with a custom server list.
+# Optional $4: set to 1 to process the local server last (after all remotes).
+#              Prevents race conditions where local uninstall deletes credentials
+#              needed for remote SSH (e.g. fleet_key) before remotes complete.
 # Sequential mode (parallel=1): animated spinner per server, result line on completion.
 # Parallel mode (parallel=N>1): global progress line, results print as jobs complete.
 # Updates globals: success_count, warn_count, failure_count.
 iterate_servers() {
-    local local_fn=$1 remote_fn=$2 _servers_var=${3:-""}
+    local local_fn=$1 remote_fn=$2 _servers_var=${3:-""} _local_last=${4:-0}
     success_count=0; warn_count=0; failure_count=0
 
     local max_jobs
@@ -137,13 +140,21 @@ iterate_servers() {
 
     # ── Sequential mode ────────────────────────────────────────────────────────
     if [ "$max_jobs" -le 1 ]; then
-        local tmpfile
+        local tmpfile _deferred_server=""
         tmpfile=$(mktemp)
         _IS_stop_requested=0
         trap '_IS_sigint_handler' INT
 
         while IFS= read -r server <&3; do
             [ "$_IS_stop_requested" = 1 ] && break
+
+            # Defer local server to end when local_last=1
+            if [ "$_local_last" = "1" ] && \
+               { [ "$server" = "$MASTER_HOST" ] || [ "$(short_name "$server")" = "$(short_name "$MASTER_HOST")" ]; }; then
+                _deferred_server="$server"
+                continue
+            fi
+
             local short
             short=$(short_name "$server")
             _spin_start "$short"
@@ -164,6 +175,22 @@ iterate_servers() {
 
         done 3< <(_IS_list_servers "$_servers_var")
 
+        # Process deferred local server last (after all remotes)
+        if [ -n "$_deferred_server" ] && [ "$_IS_stop_requested" != "1" ]; then
+            local short
+            short=$(short_name "$_deferred_server")
+            _spin_start "$short"
+            $local_fn > "$tmpfile" 2>/dev/null
+            local fn_exit=$?
+            if [ "$_IS_stop_requested" = 1 ]; then
+                _spin_stop "$short" "warn" "interrupted"
+            else
+                local _status _detail
+                _IS_parse_result "$tmpfile" "$fn_exit"
+                _spin_stop "$short" "$_status" "$_detail"
+            fi
+        fi
+
         rm -f "$tmpfile"
         trap - INT
         if [ "$_IS_stop_requested" = 1 ]; then
@@ -179,7 +206,17 @@ iterate_servers() {
     trap '_IS_sigint_handler' INT
     _IS_total=$(_IS_list_servers "$_servers_var" | wc -l)
 
+    local _deferred_server=""
+
     while IFS= read -r server <&3; do
+        # Defer local server to end when local_last=1
+        if [ "$_local_last" = "1" ] && \
+           { [ "$server" = "$MASTER_HOST" ] || [ "$(short_name "$server")" = "$(short_name "$MASTER_HOST")" ]; }; then
+            _deferred_server="$server"
+            _IS_total=$(( _IS_total - 1 ))
+            continue
+        fi
+
         local short _tmpfile _pid
         short=$(short_name "$server")
 
@@ -211,7 +248,7 @@ iterate_servers() {
 
     done 3< <(_IS_list_servers "$_servers_var")
 
-    # Drain remaining jobs
+    # Drain all remote jobs
     while [ "${#_IS_active[@]}" -gt 0 ]; do
         [ "$_IS_stop_requested" = 1 ] && break
         local _done_pid=""
@@ -224,6 +261,20 @@ iterate_servers() {
         [ "$_IS_stop_requested" = 1 ] && break
         _IS_collect_result "$_done_pid"
     done
+
+    # Process deferred local server after all remotes are done
+    if [ -n "$_deferred_server" ] && [ "$_IS_stop_requested" != "1" ]; then
+        local short _tmpfile fn_exit _status _detail
+        short=$(short_name "$_deferred_server")
+        _tmpfile=$(mktemp)
+        printf "\r\033[K"
+        _spin_start "$short"
+        $local_fn > "$_tmpfile" 2>/dev/null
+        fn_exit=$?
+        _IS_parse_result "$_tmpfile" "$fn_exit"
+        _spin_stop "$short" "$_status" "$_detail"
+        rm -f "$_tmpfile"
+    fi
 
     printf "\r\033[K"
     trap - INT

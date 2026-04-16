@@ -181,7 +181,8 @@ build_server_list_labels() {
 # Builds a display label array from the server_order and server_pods globals.
 # Usage: build_server_labels <labels_array_name>
 build_server_labels() {
-    local -n _labels=$1
+    # shellcheck disable=SC2178
+    local -n _labels="$1"
     local server pods_display
     for server in "${server_order[@]}"; do
         pods_display="${server_pods[$server]// /, }"
