@@ -513,13 +513,21 @@ sync_remote() {
     ok "FQDN cached"
 
     if [ -f "$FLEET_KEY" ] && [ -f "$FLEET_PASS_FILE" ]; then
-        ssh_cmd "$server" "mkdir -p ~/.ssh && chmod 700 ~/.ssh" > /dev/null 2>&1
-        scp_cmd "$FLEET_KEY" "$server:~/.ssh/fleet_key" > /dev/null 2>&1 \
-            && ssh_cmd "$server" "chmod 600 ~/.ssh/fleet_key" > /dev/null 2>&1
+        # Use ssh+stdin instead of scp so $HOME is resolved by the remote shell
+        # (SSSD/PAM home) rather than by the SSH daemon (~, from /etc/passwd).
+        # shellcheck disable=SC2016  # $HOME must expand on the remote, not locally
+        ssh_cmd "$server" 'mkdir -p "$HOME/.ssh" && chmod 700 "$HOME/.ssh"' > /dev/null 2>&1
+        # shellcheck disable=SC2016
+        ssh_cmd "$server" 'cat > "$HOME/.ssh/fleet_key" && chmod 600 "$HOME/.ssh/fleet_key"' \
+            < "$FLEET_KEY" > /dev/null 2>&1
         if [ -f "${FLEET_KEY}.pub" ]; then
-            scp_cmd "${FLEET_KEY}.pub" "$server:~/.ssh/fleet_key.pub" > /dev/null 2>&1
+            # shellcheck disable=SC2016
+            ssh_cmd "$server" 'cat > "$HOME/.ssh/fleet_key.pub"' \
+                < "${FLEET_KEY}.pub" > /dev/null 2>&1
         fi
-        scp_cmd "$FLEET_PASS_FILE" "$server:~/.fleet_pass.enc" > /dev/null 2>&1
+        # shellcheck disable=SC2016
+        ssh_cmd "$server" 'cat > "$HOME/.fleet_pass.enc" && chmod 600 "$HOME/.fleet_pass.enc"' \
+            < "$FLEET_PASS_FILE" > /dev/null 2>&1
         ok "fleet key + encrypted password deployed"
     fi
 

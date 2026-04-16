@@ -236,13 +236,27 @@ EOF
     touch "$FLEET_KEY"
     touch "$FLEET_PASS_FILE"
     rsync_cmd() { return 0; }
-    ssh_cmd() { echo "F_ADDED"; }
+    local ssh_log="$BATS_TEST_TMPDIR/ssh_log"
+    ssh_cmd() { echo "$*" >> "$ssh_log"; return 0; }
+
+    run sync_remote "dev1.fleet.test"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"fleet key"* ]]
+}
+
+@test "sync_remote: fleet_key + passfile present → uses ssh not scp for key deployment" {
+    touch "$HOME/.bash_aliases"
+    touch "$FLEET_KEY"
+    touch "$FLEET_PASS_FILE"
+    rsync_cmd() { return 0; }
+    ssh_cmd() { return 0; }
     local scp_log="$BATS_TEST_TMPDIR/scp_log"
     scp_cmd() { echo "$*" >> "$scp_log"; return 0; }
 
     run sync_remote "dev1.fleet.test"
     [ "$status" -eq 0 ]
-    [[ "$output" == *"fleet key"* ]]
+    # fleet_key and fleet_pass must go via ssh (stdin pipe), not scp
+    [ ! -f "$scp_log" ] || ! grep -qE 'fleet_(key|pass)' "$scp_log"
 }
 
 # ── parse_args ─────────────────────────────────────────────────────────────────
