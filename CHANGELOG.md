@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `fleetman ssh` — SSH into any fleet server via an interactive menu; optional `-e <env>` and `-s <shortname-filter>` flags; reads from `config.json .servers`
+
 ## [0.0.3] - 2026-04-16
 
 ### Added

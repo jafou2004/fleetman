@@ -164,6 +164,20 @@ prompt_sync_confirm() {
     fi
 }
 
+# Builds a display label array from server_list and server_envs globals.
+# Format: "shortname [ENV]" with env portion colorized via env_color_ansi.
+# Usage: build_server_list_labels <labels_array_name>
+build_server_list_labels() {
+    local -n _labels=$1
+    local fqdn env color bg
+    for fqdn in "${server_list[@]}"; do
+        env="${server_envs[$fqdn]}"
+        color=$(jq -r --arg e "$env" '.env_colors[$e] // "white"' "$CONFIG_FILE" 2>/dev/null)
+        bg=$(env_color_ansi "$color" bg)
+        _labels+=("$(printf "%s ${bg}[%s]${NC}" "$(short_name "$fqdn")" "${env^^}")")
+    done
+}
+
 # Builds a display label array from the server_order and server_pods globals.
 # Usage: build_server_labels <labels_array_name>
 build_server_labels() {

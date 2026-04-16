@@ -310,3 +310,47 @@ _smm_run() {
     grep -q "sync" "$call_file"
     ! grep -q -- "-q" "$call_file"
 }
+
+# ── build_server_list_labels ──────────────────────────────────────────────────
+
+@test "build_server_list_labels: one label per server in server_list" {
+    server_list=("dev1.fleet.test" "prod1.fleet.test")
+    declare -gA server_envs=(["dev1.fleet.test"]="dev" ["prod1.fleet.test"]="prod")
+    local labels=()
+    build_server_list_labels labels
+    [ "${#labels[@]}" -eq 2 ]
+}
+
+@test "build_server_list_labels: label contains shortname" {
+    server_list=("dev1.fleet.test")
+    declare -gA server_envs=(["dev1.fleet.test"]="dev")
+    local labels=()
+    build_server_list_labels labels
+    [[ "${labels[0]}" == *"dev1"* ]]
+}
+
+@test "build_server_list_labels: label contains uppercased env in brackets" {
+    server_list=("dev1.fleet.test")
+    declare -gA server_envs=(["dev1.fleet.test"]="dev")
+    local labels=()
+    build_server_list_labels labels
+    [[ "${labels[0]}" == *"DEV"* ]]
+    [[ "${labels[0]}" == *"["* ]]
+}
+
+@test "build_server_list_labels: empty server_list → empty labels" {
+    server_list=()
+    declare -gA server_envs=()
+    local labels=()
+    build_server_list_labels labels
+    [ "${#labels[@]}" -eq 0 ]
+}
+
+@test "build_server_list_labels: label order matches server_list order" {
+    server_list=("dev1.fleet.test" "prod2.fleet.test")
+    declare -gA server_envs=(["dev1.fleet.test"]="dev" ["prod2.fleet.test"]="prod")
+    local labels=()
+    build_server_list_labels labels
+    [[ "${labels[0]}" == *"dev1"* ]]
+    [[ "${labels[1]}" == *"prod2"* ]]
+}

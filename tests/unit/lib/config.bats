@@ -303,3 +303,116 @@ EOF
     collect_pod_servers
     [ "$_all" = "false" ]
 }
+
+# ── parse_server_filter_opts ───────────────────────────────────────────────────
+
+@test "parse_server_filter_opts: -s srv -e dev → SERVER_FILTER='srv' ENV_FILTER='dev'" {
+    parse_server_filter_opts -s srv -e dev || true
+    [ "$SERVER_FILTER" = "srv" ]
+    [ "$ENV_FILTER" = "dev" ]
+}
+
+@test "parse_server_filter_opts: no flags → SERVER_FILTER and ENV_FILTER empty" {
+    parse_server_filter_opts || true
+    [ "$SERVER_FILTER" = "" ]
+    [ "$ENV_FILTER" = "" ]
+}
+
+@test "parse_server_filter_opts: -e only → SERVER_FILTER empty, ENV_FILTER set" {
+    parse_server_filter_opts -e prod || true
+    [ "$SERVER_FILTER" = "" ]
+    [ "$ENV_FILTER" = "prod" ]
+}
+
+@test "parse_server_filter_opts: -s only → ENV_FILTER empty, SERVER_FILTER set" {
+    parse_server_filter_opts -s prod || true
+    [ "$ENV_FILTER" = "" ]
+    [ "$SERVER_FILTER" = "prod" ]
+}
+
+@test "parse_server_filter_opts: returns the number of parsed args to shift" {
+    local shift_count
+    parse_server_filter_opts -s srv -e dev || shift_count=$?
+    [ "$shift_count" -eq 4 ]
+}
+
+@test "parse_server_filter_opts: -e without argument → exit 1 + 'requires an argument'" {
+    run parse_server_filter_opts -e
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"requires an argument"* ]]
+}
+
+@test "parse_server_filter_opts: unknown flag → exit 1 + 'Unknown option'" {
+    run parse_server_filter_opts -z
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"Unknown option"* ]]
+}
+
+# ── collect_servers ────────────────────────────────────────────────────────────
+
+@test "collect_servers: no filter → 5 servers from all envs" {
+    SERVER_FILTER="" ENV_FILTER=""
+    collect_servers
+    [ "${#server_list[@]}" -eq 5 ]
+    [[ " ${server_list[*]} " == *"dev1.fleet.test"* ]]
+    [[ " ${server_list[*]} " == *"dev2.fleet.test"* ]]
+    [[ " ${server_list[*]} " == *"test1.fleet.test"* ]]
+    [[ " ${server_list[*]} " == *"prod1.fleet.test"* ]]
+    [[ " ${server_list[*]} " == *"prod2.fleet.test"* ]]
+}
+
+@test "collect_servers: ENV_FILTER='dev' → 2 servers" {
+    SERVER_FILTER="" ENV_FILTER="dev"
+    collect_servers
+    [ "${#server_list[@]}" -eq 2 ]
+    [[ " ${server_list[*]} " == *"dev1.fleet.test"* ]]
+    [[ " ${server_list[*]} " == *"dev2.fleet.test"* ]]
+    [[ " ${server_list[*]} " != *"test1.fleet.test"* ]]
+}
+
+@test "collect_servers: SERVER_FILTER='prod' → 2 servers (prod1, prod2)" {
+    SERVER_FILTER="prod" ENV_FILTER=""
+    collect_servers
+    [ "${#server_list[@]}" -eq 2 ]
+    [[ " ${server_list[*]} " == *"prod1.fleet.test"* ]]
+    [[ " ${server_list[*]} " == *"prod2.fleet.test"* ]]
+    [[ " ${server_list[*]} " != *"dev1.fleet.test"* ]]
+}
+
+@test "collect_servers: SERVER_FILTER='1' → 3 servers (dev1, test1, prod1)" {
+    SERVER_FILTER="1" ENV_FILTER=""
+    collect_servers
+    [ "${#server_list[@]}" -eq 3 ]
+    [[ " ${server_list[*]} " == *"dev1.fleet.test"* ]]
+    [[ " ${server_list[*]} " == *"test1.fleet.test"* ]]
+    [[ " ${server_list[*]} " == *"prod1.fleet.test"* ]]
+    [[ " ${server_list[*]} " != *"dev2.fleet.test"* ]]
+}
+
+@test "collect_servers: ENV_FILTER='prod' SERVER_FILTER='prod1' → 1 server" {
+    SERVER_FILTER="prod1" ENV_FILTER="prod"
+    collect_servers
+    [ "${#server_list[@]}" -eq 1 ]
+    [ "${server_list[0]}" = "prod1.fleet.test" ]
+}
+
+@test "collect_servers: server_envs maps fqdn to env" {
+    SERVER_FILTER="" ENV_FILTER="dev"
+    collect_servers
+    [ "${server_envs["dev1.fleet.test"]}" = "dev" ]
+    [ "${server_envs["dev2.fleet.test"]}" = "dev" ]
+}
+
+@test "collect_servers: invalid ENV_FILTER → exit 1 + 'invalid environment'" {
+    SERVER_FILTER="" ENV_FILTER="nosuchenv"
+    run collect_servers
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"invalid environment"* ]]
+    [[ "$output" == *"nosuchenv"* ]]
+}
+
+@test "collect_servers: SERVER_FILTER='nonexistent' → server_list empty" {
+    SERVER_FILTER="nonexistent" ENV_FILTER=""
+    collect_servers
+    [ "${#server_list[@]}" -eq 0 ]
+}

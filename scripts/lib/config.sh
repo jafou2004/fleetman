@@ -178,6 +178,25 @@ collect_pod_servers() {
     done <<< "$envs"
 }
 
+# Parses flags -s, -e, -h from the caller's "$@".
+# Sets globals SERVER_FILTER="" and ENV_FILTER="".
+# Usage in main(): parse_server_filter_opts "$@" ; shift $((OPTIND - 1))
+parse_server_filter_opts() {
+    SERVER_FILTER="" ENV_FILTER=""
+    local opt
+    OPTIND=1
+    while getopts ":s:e:h" opt "$@"; do
+      case $opt in
+        s) SERVER_FILTER="$OPTARG" ;;
+        e) ENV_FILTER="$OPTARG" ;;
+        h) exit 0 ;;
+        :) err "Option -$OPTARG requires an argument."; exit 1 ;;
+        \?) err "Unknown option: -$OPTARG"; exit 1 ;;
+      esac
+    done
+    return $((OPTIND - 1))
+}
+
 # Collects servers and their matching pods for $SEARCH / $ENV_FILTER.
 # Sets globals: server_pods (assoc: server → space-sep pods), server_order (indexed array).
 # Must be called after check_pods_file + validate_env_filter.
@@ -211,5 +230,42 @@ collect_server_pods() {
                 server_order+=("$server")
             done <<< "$results"
         fi
+    done <<< "$envs"
+}
+
+# Collects all servers from config.json matching SERVER_FILTER (shortname substring)
+# and ENV_FILTER (exact env key).
+# Sets globals: server_list (indexed array of FQDNs), server_envs (assoc: fqdn → env).
+# Validates ENV_FILTER against config.json .servers keys; exits 1 on invalid env.
+collect_servers() {
+    server_list=()
+    declare -gA server_envs=()
+
+    if [ -n "$ENV_FILTER" ]; then
+        if ! jq -e --arg env "$ENV_FILTER" '.servers | has($env)' "$CONFIG_FILE" > /dev/null 2>&1; then
+            local valid_envs
+            valid_envs=$(jq -r '[.servers | keys[]] | join(", ")' "$CONFIG_FILE")
+            err "Error: invalid environment '$ENV_FILTER'. Accepted values: $valid_envs"
+            exit 1
+        fi
+    fi
+
+    local envs
+    if [ -n "$ENV_FILTER" ]; then
+        envs="$ENV_FILTER"
+    else
+        envs=$(jq -r '.servers | keys[]' "$CONFIG_FILE")
+    fi
+
+    local env fqdn short
+    while IFS= read -r env; do
+        while IFS= read -r fqdn; do
+            [ -z "$fqdn" ] && continue
+            short=$(short_name "$fqdn")
+            if [ -z "$SERVER_FILTER" ] || [[ "$short" == *"$SERVER_FILTER"* ]]; then
+                server_list+=("$fqdn")
+                server_envs["$fqdn"]="$env"
+            fi
+        done < <(jq -r --arg e "$env" '.servers[$e][]' "$CONFIG_FILE" 2>/dev/null)
     done <<< "$envs"
 }

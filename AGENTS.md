@@ -51,8 +51,8 @@ Shell tooling to manage a fleet of remote servers: synchronize bash configuratio
 | `scripts/lib/vars.sh` | Global variables: colors (`GREEN/RED/YELLOW/BLUE/CYAN/NC`), `CONFIG_FILE`, `MASTER_HOST` (read from `~/.data/fqdn` if present, otherwise `hostname -f` as fallback), `FLEET_KEY`, `FLEET_PASS_FILE`, `DATA_DIR`, `PODS_FILE`, `PODS_DIR`, `SCRIPTS_DIR`, `USER_ALIASES_FILE` |
 | `scripts/lib/display.sh` | `ok/err/warn/section/print_summary/short_name/compute_title` |
 | `scripts/lib/auth.sh` | `require_cmd/sudo_run/check_sshpass/ask_password/ssh_cmd/scp_cmd/rsync_cmd/encrypt_password/prompt_pass_and_encrypt` |
-| `scripts/lib/config.sh` | `check_config_file/parse_env/env_label/parse_search_env_opts/check_pods_file/validate_env_filter/collect_server_pods/find_and_select_pod/collect_pod_servers` |
-| `scripts/lib/ui.sh` | `prompt_response/select_menu/build_server_labels/prompt_sync_confirm` |
+| `scripts/lib/config.sh` | `check_config_file/parse_env/env_label/parse_search_env_opts/parse_server_filter_opts/check_pods_file/validate_env_filter/collect_server_pods/find_and_select_pod/collect_pod_servers/collect_servers` |
+| `scripts/lib/ui.sh` | `prompt_response/select_menu/build_server_labels/build_server_list_labels/prompt_sync_confirm` |
 | `scripts/lib/spinner.sh` | `_spin_start/_spin_stop` |
 | `scripts/lib/iterate.sh` | `iterate_servers/_IS_*/append_result/iterate_pod_servers` |
 | `scripts/lib/templates.sh` | Per-server `.env` template engine — `_parse_server_parts`, `_apply_var`, `_substitute`, `_build_sed_cmds`, `_apply_templates`, `_escape_for_sed`, `_get_env_for_server`; shared by `pod/env/cp.sh`, `pod/update.sh`, and `pod/env/diff.sh`; callers must set `TEMPLATES_JSON` + `TEMPLATE_VARS_JSON` + `SELECTED_POD` before calling; `_substitute` resolves object-form `template_vars` values env-aware (uses `has($env)` guard — not `//` — to avoid jq falsiness gotcha on `false`/`0` values) |
@@ -197,7 +197,7 @@ jq -r --arg pod "service-docker" '.[] | to_entries[] | select(.value[] == $pod) 
 
 **`commands/*.sh` convention**: expose only `cmd_*()` functions — no `main()`, no top-level executable code, no main guard. The dispatcher calls `cmd_<verb>()` directly.
 
-**Command docblock (help system)**: every `scripts/commands/**/*.sh` must open with a `##`-delimited docblock. The dispatcher reads it for `-h`/`--help` — **no `help()` function, no `h` in getopts**. Regular `# ` comments outside `##` are developer notes and do NOT appear in help. First non-`@tag` content line = short description shown in `fleetman -h` listing. Sub-commands that appear in a parent interactive menu must also include `# @menu <label>` and `# @order <N>` at the top of the docblock — `_cli_extract_desc` and `_cli_cmd_help` skip `# @*` lines so they don't leak into help output. **`@order` values must be unique within a directory** — a collision shifts all subsequent menu indices, breaking `SELECTED_IDX` assertions in `tests/unit/commands/config.bats`. Current `config/` order: parallel=1, status=2, podsignore=3, autosync=4, env=5, server=6, templatevars=7, welcome=8, basefolder=9, selfupdate=10, pod=11, updatepassword=12, portrange=13.
+**Command docblock (help system)**: every `scripts/commands/**/*.sh` must open with a `##`-delimited docblock. The dispatcher reads it for `-h`/`--help` — **no `help()` function, no `h` in getopts**. Regular `# ` comments outside `##` are developer notes and do NOT appear in help. First non-`@tag` content line = short description shown in `fleetman -h` listing. Sub-commands that appear in a parent interactive menu must also include `# @menu <label>` and `# @order <N>` at the top of the docblock — `_cli_extract_desc` and `_cli_cmd_help` skip `# @*` lines so they don't leak into help output. **Top-level commands** (dispatched directly by `cli_dispatch` from `commands/`) do NOT need `@menu` or `@order` — `_cli_scan_menu_dir` is only called for sub-command directories. **`@order` values must be unique within a directory** — a collision shifts all subsequent menu indices, breaking `SELECTED_IDX` assertions in `tests/unit/commands/config.bats`. Current `config/` order: parallel=1, status=2, podsignore=3, autosync=4, env=5, server=6, templatevars=7, welcome=8, basefolder=9, selfupdate=10, pod=11, updatepassword=12, portrange=13.
 ```bash
 ##
 # @menu Short menu label
@@ -271,6 +271,7 @@ jq -r --arg pod "service-docker" '.[] | to_entries[] | select(.value[] == $pod) 
 - `fixtures/config.json` + `fixtures/pods.json` — fictitious fleet data (no real FQDNs); `config.json` is whitelisted in `.gitignore` via `!tests/fixtures/config.json`
 - `unit/` — test individual lib functions; `load_common` in `setup()` sets up clean HOME + fixtures + sources all needed libs; then source the command under test: `source "$SCRIPTS_DIR/commands/pod/pull.sh"`
 - `unit/commands/pod/` — unit tests for pod sub-commands; load path is `load '../../../test_helper/common'` (one extra `../` vs flat `unit/commands/`)
+- `unit/commands/*.bats` — unit tests for top-level commands (e.g. `ssh.bats`); load path is `load '../../test_helper/common'`
 - `integration/pod/` — integration tests for pod sub-commands; load path is `load '../../test_helper/common'`
 - `unit/auth.bats` — tests `ask_password`, `sudo_run`, `ssh_cmd`, `scp_cmd`; mocks `openssl`, `sudo`, `ssh`, `scp`, `sshpass` binaries
 - `unit/ui.bats` — tests `prompt_response`, `prompt_sync_confirm`; `select_menu` is skipped (requires TTY arrow-key input)

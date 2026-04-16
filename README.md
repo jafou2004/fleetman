@@ -117,6 +117,9 @@ After `source ~/.bashrc`:
 fleetman sync                        # Synchronize scripts and config to all servers
 fleetman sync -q                     # Quick sync (config only, skip pod collection)
 fleetman status                      # Fleet health: SSH, Docker, containers
+fleetman ssh                         # SSH into any fleet server (interactive menu)
+fleetman ssh -e prod                 # SSH — filter by environment
+fleetman ssh -s srv2                 # SSH — filter servers whose shortname contains "srv2"
 fleetman exec "uptime"               # Run a command on all servers
 fleetman exec "df -h" -e prod        # Run only on prod
 fleetman sudo -- whoami              # Run a command with sudo
