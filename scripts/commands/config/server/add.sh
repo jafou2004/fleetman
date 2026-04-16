@@ -4,7 +4,7 @@
 # @menu Add server
 # @order 1
 #
-# Adds a new server to config.json (.servers).
+# Adds one or more new servers to config.json (.servers).
 #
 # Usage: fleetman config server add
 #
@@ -44,7 +44,7 @@ _is_server_registered() {
     jq -e --arg s "$fqdn" '[.servers[] | .[]] | any(. == $s)' "$CONFIG_FILE" > /dev/null 2>&1
 }
 
-_bootstrap_key() {
+_deploy_key() {
     local fqdn="$1"
 
     if [[ ! -f "$FLEET_KEY" ]] || [[ ! -f "$FLEET_PASS_FILE" ]]; then
@@ -79,15 +79,6 @@ _bootstrap_key() {
     ok "Key authentication verified"
 
     unset raw_password
-
-    local _fleetman="$SCRIPTS_DIR/bin/fleetman"
-    if [[ -f "$_fleetman" ]]; then
-        section "Launching sync"
-        echo ""
-        bash "$_fleetman" sync
-    else
-        warn "fleetman not found — run 'fleetman sync' manually"
-    fi
 }
 
 cmd_config_server_add() {
@@ -107,7 +98,7 @@ cmd_config_server_add() {
     _list_servers
     echo ""
 
-    # ── Menu 1: environment selection ──────────────────────────────────
+    # ── Menu: environment selection ──────────────────────────────────
     local -a env_names=()
     mapfile -t env_names < <(jq -r '.servers | keys[]' "$CONFIG_FILE")
 
@@ -123,10 +114,13 @@ cmd_config_server_add() {
     select_menu env_labels
     local selected_env="${env_names[$SELECTED_IDX]}"
 
-    # ── FQDN prompt loop ─────────────────────────────────────────────────
+    # ── FQDN collection loop ──────────────────────────────────────────
+    local -a added_servers=()
     local new_server
     while true; do
-        new_server=$(prompt_response "FQDN of the new server")
+        printf "FQDN of the new server (empty to finish) ? " >&2
+        read -r new_server
+        [[ -z "$new_server" ]] && break
         new_server="${new_server,,}"
 
         if ! _is_valid_fqdn "$new_server"; then
@@ -139,21 +133,38 @@ cmd_config_server_add() {
             continue
         fi
 
-        break
+        local tmp
+        tmp=$(mktemp)
+        if ! jq --arg e "$selected_env" --arg s "$new_server" \
+            '.servers[$e] += [$s]' \
+            "$CONFIG_FILE" > "$tmp" || ! mv "$tmp" "$CONFIG_FILE"; then
+            rm -f "$tmp"
+            err "Failed to write config"
+            exit 1
+        fi
+
+        ok "Server '$new_server' added to environment '$selected_env'"
+        added_servers+=("$new_server")
     done
 
-    # ── Atomic write ─────────────────────────────────────────────────────
-    local tmp
-    tmp=$(mktemp)
-    if ! jq --arg e "$selected_env" --arg s "$new_server" \
-        '.servers[$e] += [$s]' \
-        "$CONFIG_FILE" > "$tmp" || ! mv "$tmp" "$CONFIG_FILE"; then
-        rm -f "$tmp"
-        err "Failed to write config"
-        exit 1
+    if [[ ${#added_servers[@]} -eq 0 ]]; then
+        warn "No server added"
+        exit 0
     fi
 
-    ok "Server '$new_server' added to environment '$selected_env'"
+    # ── Deploy keys (one per server) ──────────────────────────────────
+    local fqdn
+    for fqdn in "${added_servers[@]}"; do
+        _deploy_key "$fqdn"
+    done
 
-    _bootstrap_key "$new_server"
+    # ── Sync (once) ───────────────────────────────────────────────────
+    local _fleetman="$SCRIPTS_DIR/bin/fleetman"
+    if [[ -f "$_fleetman" ]]; then
+        section "Launching sync"
+        echo ""
+        bash "$_fleetman" sync
+    else
+        warn "fleetman not found — run 'fleetman sync' manually"
+    fi
 }

@@ -11,6 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `fleetman ssh` — SSH into any fleet server via an interactive menu; optional `-e <env>` and `-s <shortname-filter>` flags; reads from `config.json .servers`
 
+### Changed
+- `fleetman config server add` — accepts multiple FQDNs (empty line to finish) before deploying SSH keys and syncing once
+
 ### Fixed
 
 - `sync`: env with empty server list in `config.json` no longer triggers a spurious error line — `_IS_list_servers` now skips iteration when the array is empty
