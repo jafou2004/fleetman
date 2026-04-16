@@ -112,7 +112,7 @@ _IS_list_servers() {
     local _var="$1"
     if [ -n "$_var" ]; then
         local -n _arr="$_var"
-        printf '%s\n' "${_arr[@]}"
+        [ "${#_arr[@]}" -gt 0 ] && printf '%s\n' "${_arr[@]}" || true
     elif [ -n "$ENV" ]; then
         jq -r --arg env "$ENV" '.servers[$env] | .[]' "$CONFIG_FILE"
     else

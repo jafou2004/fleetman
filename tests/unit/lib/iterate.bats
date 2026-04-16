@@ -25,6 +25,13 @@ setup() {
     [ "${lines[1]}" = "host2.test" ]
 }
 
+@test "_IS_list_servers: empty array provided → outputs nothing" {
+    local -a empty_servers=()
+    run _IS_list_servers "empty_servers"
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 0 ]
+}
+
 @test "_IS_list_servers: ENV='dev' → returns dev servers from config" {
     ENV="dev"
     run _IS_list_servers ""
