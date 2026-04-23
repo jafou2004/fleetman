@@ -136,13 +136,100 @@ select_menu() {
     SELECTED_IDX=$selected
 }
 
-# Prints a [Y/n] prompt and returns 0 if confirmed (Y/Enter), 1 if declined (n/N).
-# Usage: prompt_confirm "Question text"
+# Arrow-key selection menu with disabled (non-selectable) items. Sets global SELECTED_IDX.
+# Cursor skips disabled items automatically. Caller must pre-check that at least one
+# item is enabled before calling.
+# Usage: select_menu_disabled <labels_array> <disabled_indices_array>
+select_menu_disabled() {
+    local -n _smd_labels=$1
+    local -n _smd_dis_ref=$2
+    local count=${#_smd_labels[@]}
+    local -a _smd_dis=("${_smd_dis_ref[@]}")
+
+    _smd_is_disabled() {
+        local _idx=$1 _d
+        for _d in "${_smd_dis[@]}"; do
+            [[ "$_d" -eq "$_idx" ]] && return 0
+        done
+        return 1
+    }
+
+    _smd_next() {
+        local _cur=$1 _dir=$2
+        local _next=$(( _cur + _dir ))
+        local _loops=0
+        while [ "$_loops" -lt "$count" ]; do
+            [ "$_next" -lt 0 ] && _next=$(( count - 1 ))
+            [ "$_next" -ge "$count" ] && _next=0
+            if ! _smd_is_disabled "$_next"; then
+                echo "$_next"; return
+            fi
+            _next=$(( _next + _dir ))
+            _loops=$(( _loops + 1 ))
+        done
+        echo "$_cur"
+    }
+
+    local selected=0
+    local i
+    for i in "${!_smd_labels[@]}"; do
+        if ! _smd_is_disabled "$i"; then selected=$i; break; fi
+    done
+
+    tput civis 2>/dev/null
+
+    _smd_draw() {
+        local _i
+        for _i in "${!_smd_labels[@]}"; do
+            if _smd_is_disabled "$_i"; then
+                echo -e "  ${GREY}  ✕ ${_smd_labels[$_i]}${NC}"
+            elif [ "$_i" -eq "$selected" ]; then
+                echo -e "  ${BLUE}▶ ${_smd_labels[$_i]}${NC}"
+            else
+                echo "    ${_smd_labels[$_i]}"
+            fi
+        done
+    }
+
+    _smd_draw
+
+    while true; do
+        local key
+        IFS= read -rsn1 key
+        if [[ "$key" == $'\x1b' ]]; then
+            read -rsn2 -t 0.1 key
+            case "$key" in
+                '[A') selected=$(_smd_next "$selected" -1) ;;
+                '[B') selected=$(_smd_next "$selected" 1) ;;
+            esac
+        elif [[ "$key" == '' ]]; then
+            break
+        elif [[ "$key" == 'q' ]] || [[ "$key" == $'\x03' ]]; then
+            tput cnorm 2>/dev/null
+            echo ""
+            exit 0
+        fi
+        tput cuu "$count" 2>/dev/null
+        _smd_draw
+    done
+
+    tput cnorm 2>/dev/null
+    SELECTED_IDX=$selected
+}
+
+# Prints a [Y/n] or [y/N] prompt and returns 0 if confirmed, 1 if declined.
+# Usage: prompt_confirm "Question text" [default]
+#   default: "Y" (default) → [Y/n], empty=Y; "N" → [y/N], empty=N
 prompt_confirm() {
-    local question="$1" answer
-    printf "  %s [Y/n] " "$question"
+    local question="$1" default="${2:-Y}" answer prompt_str
+    if [[ "${default^^}" == "N" ]]; then
+        prompt_str="[y/N]"
+    else
+        prompt_str="[Y/n]"
+    fi
+    printf "  %s %s " "$question" "$prompt_str"
     read -r answer
-    answer="${answer:-Y}"
+    answer="${answer:-$default}"
     [[ ! "$answer" =~ ^[nN] ]]
 }
 

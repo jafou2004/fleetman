@@ -174,7 +174,7 @@ Ports are scanned across all environments and servers so a port reserved in `dev
 fleetman config               # Interactive config menu
 fleetman config parallel      # Set the number of parallel SSH jobs
 fleetman config env           # Manage environments (add, change color)
-fleetman config server        # Manage servers (add)
+fleetman config server        # Manage servers (add, remove)
 fleetman config status        # Manage status check containers
 fleetman config templatevars  # Manage template_vars
 fleetman config welcome       # Toggle welcome screen options
@@ -276,6 +276,10 @@ Set `pin` to a specific version (e.g. `"v1.2.0"`) to lock the fleet to that rele
 
 1. Run `fleetman config server add` — prompts for the FQDN, selects the environment, and offers to bootstrap the new server
 2. Run `fleetman sync`
+
+### Removing a server
+
+Run `fleetman config server remove` — selects the environment and server interactively, uninstalls fleetman from it, updates `config.json`, and runs a quick sync. The git clone server is protected and cannot be selected. If the local server is targeted, sync runs first, then fleetman uninstalls itself last.
 
 ### Rotating the fleet password
 

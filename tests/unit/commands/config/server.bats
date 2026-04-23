@@ -30,3 +30,11 @@ setup() {
     [ "$status" -eq 0 ]
     [[ "$output" == *"ADD_CALLED"* ]]
 }
+
+@test "cmd_config_server: selection 1 (Remove server) → calls cmd_config_server_remove" {
+    cmd_config_server_remove() { echo "REMOVE_CALLED"; }
+    select_menu() { SELECTED_IDX=1; }
+    run cmd_config_server
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"REMOVE_CALLED"* ]]
+}

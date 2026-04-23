@@ -235,6 +235,59 @@ _smm_run() {
     [ "$status" -eq 0 ]
 }
 
+# ── select_menu_disabled ──────────────────────────────────────────────────────
+# Same piped-input technique as _sm_run. disabled arg is space-separated indices.
+
+_smd_run() {
+    local input="$1" disabled_str="${2:-}"
+    bash -c "
+        source '$SCRIPTS_DIR/lib/vars.sh'
+        source '$SCRIPTS_DIR/lib/display.sh'
+        source '$SCRIPTS_DIR/lib/ui.sh'
+        labels=('item A' 'item B' 'item C')
+        disabled=($disabled_str)
+        select_menu_disabled labels disabled >/dev/null 2>&1 < <(printf '%b' '$input')
+        echo \$SELECTED_IDX
+    "
+}
+
+@test "select_menu_disabled: no disabled items, Enter → SELECTED_IDX=0" {
+    result=$(_smd_run '\n')
+    [ "$result" -eq 0 ]
+}
+
+@test "select_menu_disabled: item 0 disabled, Enter → SELECTED_IDX=1 (first enabled)" {
+    result=$(_smd_run '\n' '0')
+    [ "$result" -eq 1 ]
+}
+
+@test "select_menu_disabled: item 0 disabled, down arrow → SELECTED_IDX=2" {
+    result=$(_smd_run '\x1b[B\n' '0')
+    [ "$result" -eq 2 ]
+}
+
+@test "select_menu_disabled: item 0 disabled, up from idx 1 → wraps to last enabled (idx 2)" {
+    result=$(_smd_run '\x1b[A\n' '0')
+    [ "$result" -eq 2 ]
+}
+
+@test "select_menu_disabled: item 2 disabled, two down arrows → wraps to idx 0 (skips 2)" {
+    result=$(_smd_run '\x1b[B\x1b[B\n' '2')
+    [ "$result" -eq 0 ]
+}
+
+@test "select_menu_disabled: 'q' → exit 0" {
+    run bash -c "
+        source '$SCRIPTS_DIR/lib/vars.sh'
+        source '$SCRIPTS_DIR/lib/display.sh'
+        source '$SCRIPTS_DIR/lib/ui.sh'
+        labels=('item A' 'item B')
+        disabled=()
+        select_menu_disabled labels disabled >/dev/null 2>&1 < <(printf 'q')
+    "
+    [ "$status" -eq 0 ]
+}
+
 # ── prompt_confirm ────────────────────────────────────────────────────────────
 
 @test "prompt_confirm: input Y → return 0" {
@@ -260,6 +313,31 @@ _smm_run() {
 @test "prompt_confirm: prints question with [Y/n] prompt" {
     run prompt_confirm "Delete it?" <<< 'Y'
     [[ "$output" == *"Delete it?"* ]]
+    [[ "$output" == *"[Y/n]"* ]]
+}
+
+@test "prompt_confirm: default N, empty input → return 1" {
+    run prompt_confirm "Delete?" N <<< ''
+    [ "$status" -eq 1 ]
+}
+
+@test "prompt_confirm: default N, input 'y' → return 0" {
+    run prompt_confirm "Delete?" N <<< 'y'
+    [ "$status" -eq 0 ]
+}
+
+@test "prompt_confirm: default N, input 'Y' → return 0" {
+    run prompt_confirm "Delete?" N <<< 'Y'
+    [ "$status" -eq 0 ]
+}
+
+@test "prompt_confirm: default N, displays [y/N] in prompt" {
+    run prompt_confirm "Delete?" N <<< 'n'
+    [[ "$output" == *"[y/N]"* ]]
+}
+
+@test "prompt_confirm: default Y (explicit), displays [Y/n]" {
+    run prompt_confirm "Continue?" Y <<< 'Y'
     [[ "$output" == *"[Y/n]"* ]]
 }
 
