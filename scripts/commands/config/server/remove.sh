@@ -30,12 +30,6 @@ source "$_LIB/uninstall.sh"
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
-_get_git_server() {
-    if [[ -f "$GIT_SERVER_FILE" ]]; then
-        cat "$GIT_SERVER_FILE"
-    fi
-}
-
 _remove_from_config() {
     local env="$1" fqdn="$2"
     local tmp
@@ -48,16 +42,6 @@ _remove_from_config() {
         return 1
     fi
     ok "Server '$fqdn' removed from config.json"
-}
-
-_delete_ascii() {
-    local fqdn="$1"
-    local ascii_file
-    ascii_file="$DATA_DIR/welcome_$(short_name "$fqdn").ascii"
-    if [[ -f "$ascii_file" ]]; then
-        rm -f "$ascii_file"
-        ok "ASCII art deleted — $ascii_file"
-    fi
 }
 
 # ── Main ───────────────────────────────────────────────────────────────────────
@@ -79,28 +63,8 @@ cmd_config_server_remove() {
 
     # ── Env selection ──────────────────────────────────────────────────
     local selected_env
-    if [[ -n "$_env_flag" ]]; then
-        if ! jq -e --arg e "$_env_flag" '.servers | has($e)' "$CONFIG_FILE" > /dev/null 2>&1; then
-            local _valid
-            _valid=$(jq -r '[.servers | keys[]] | join(", ")' "$CONFIG_FILE")
-            err "Invalid environment '$_env_flag'. Valid: $_valid"
-            exit 1
-        fi
-        selected_env="$_env_flag"
-    else
-        local -a _env_names=()
-        mapfile -t _env_names < <(jq -r '.servers | keys[]' "$CONFIG_FILE")
-        local -a _env_labels=()
-        local _e _color _bg
-        for _e in "${_env_names[@]}"; do
-            _color=$(jq -r --arg e "$_e" '.env_colors[$e] // "white"' "$CONFIG_FILE")
-            _bg=$(env_color_ansi "$_color" bg)
-            _env_labels+=("$(printf "${_bg}%s${NC}" "$_e")")
-        done
-        printf "Select the target environment:\n"
-        select_menu _env_labels
-        selected_env="${_env_names[$SELECTED_IDX]}"
-    fi
+    select_env_colored "Select the target environment:" "$_env_flag"
+    selected_env="$SELECTED_ENV"
 
     # ── Server list for env ────────────────────────────────────────────
     local -a _servers=()
@@ -112,7 +76,7 @@ cmd_config_server_remove() {
     fi
 
     local _git_server
-    _git_server=$(_get_git_server)
+    _git_server=$(get_git_server)
 
     local -a _labels=() _disabled=()
     local _i _fqdn _short _color _bg
@@ -148,20 +112,15 @@ cmd_config_server_remove() {
     echo ""
 
     # ── Execute ────────────────────────────────────────────────────────
-    local _fleetman="$SCRIPTS_DIR/bin/fleetman"
-
     if is_local_server "$_target"; then
         warn "Fleetman will be uninstalled from this server after sync"
         echo ""
         section "Updating config"
         _remove_from_config "$selected_env" "$_target"
-        _delete_ascii "$_target"
+        delete_ascii "$_target"
         echo ""
-        if [[ -f "$_fleetman" ]]; then
-            section "Synchronisation"
-            bash "$_fleetman" sync -q
-            echo ""
-        fi
+        run_sync_or_warn
+        echo ""
         section "Uninstall local — $(short_name "$_target")"
         uninstall_local
         echo ""
@@ -174,14 +133,9 @@ cmd_config_server_remove() {
         echo ""
         section "Updating config"
         _remove_from_config "$selected_env" "$_target"
-        _delete_ascii "$_target"
+        delete_ascii "$_target"
         echo ""
-        if [[ -f "$_fleetman" ]]; then
-            section "Synchronisation"
-            bash "$_fleetman" sync -q
-        else
-            warn "fleetman not found — run 'fleetman sync' manually"
-        fi
+        run_sync_or_warn
     fi
 
     unset PASSWORD

@@ -269,3 +269,10 @@ collect_servers() {
         done < <(jq -r --arg e "$env" '.servers[$e][]' "$CONFIG_FILE" 2>/dev/null)
     done <<< "$envs"
 }
+
+# Returns the cached git-clone server FQDN from GIT_SERVER_FILE, or empty if not set.
+get_git_server() {
+    if [[ -f "$GIT_SERVER_FILE" ]]; then
+        cat "$GIT_SERVER_FILE"
+    fi
+}

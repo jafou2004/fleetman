@@ -276,3 +276,44 @@ build_server_labels() {
         _labels+=("$(short_name "$server")  ($pods_display)")
     done
 }
+
+# Sets global SELECTED_ENV. With env_flag: validates against config.json .servers.
+# Without: builds colored menu and calls select_menu.
+# Usage: select_env_colored <prompt> [env_flag]
+select_env_colored() {
+    local _prompt="$1" _env_flag="${2:-}"
+    if [[ -n "$_env_flag" ]]; then
+        if ! jq -e --arg e "$_env_flag" '.servers | has($e)' "$CONFIG_FILE" > /dev/null 2>&1; then
+            local _valid
+            _valid=$(jq -r '[.servers | keys[]] | join(", ")' "$CONFIG_FILE")
+            err "Invalid environment '$_env_flag'. Valid: $_valid"
+            exit 1
+        fi
+        SELECTED_ENV="$_env_flag"
+        return 0
+    fi
+    local -a _env_names=()
+    mapfile -t _env_names < <(jq -r '.servers | keys[]' "$CONFIG_FILE")
+    local -a _env_labels=()
+    local _e _color _bg
+    for _e in "${_env_names[@]}"; do
+        _color=$(jq -r --arg e "$_e" '.env_colors[$e] // "white"' "$CONFIG_FILE")
+        _bg=$(env_color_ansi "$_color" bg)
+        _env_labels+=("$(printf "${_bg}%s${NC}" "$_e")")
+    done
+    printf "%s\n" "$_prompt"
+    select_menu _env_labels
+    SELECTED_ENV="${_env_names[$SELECTED_IDX]}"
+}
+
+# Runs fleetman sync -q if binary is present, warns if not.
+# Usage: run_sync_or_warn
+run_sync_or_warn() {
+    local _fleetman="$SCRIPTS_DIR/bin/fleetman"
+    if [[ -f "$_fleetman" ]]; then
+        section "Synchronisation"
+        bash "$_fleetman" sync -q
+    else
+        warn "fleetman not found — run 'fleetman sync' manually"
+    fi
+}

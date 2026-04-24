@@ -416,3 +416,21 @@ EOF
     collect_servers
     [ "${#server_list[@]}" -eq 0 ]
 }
+
+# ── get_git_server ─────────────────────────────────────────────────────────────
+
+@test "get_git_server: file present → returns FQDN" {
+    mkdir -p "$HOME/.data"
+    echo "git1.fleet.test" > "$HOME/.data/git_server"
+    export GIT_SERVER_FILE="$HOME/.data/git_server"
+    run get_git_server
+    [ "$status" -eq 0 ]
+    [ "$output" = "git1.fleet.test" ]
+}
+
+@test "get_git_server: file absent → returns empty" {
+    export GIT_SERVER_FILE="$HOME/.data/git_server_absent"
+    run get_git_server
+    [ "$status" -eq 0 ]
+    [ -z "$output" ]
+}

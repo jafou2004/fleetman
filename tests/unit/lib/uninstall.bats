@@ -72,3 +72,21 @@ setup() {
     run uninstall_local
     [ "$status" -eq 0 ]
 }
+
+# ── delete_ascii ───────────────────────────────────────────────────────────────
+
+@test "delete_ascii: ASCII file present → deleted + ✓ in output" {
+    mkdir -p "$HOME/.data"
+    export DATA_DIR="$HOME/.data"
+    touch "$HOME/.data/welcome_srv1.ascii"
+    run delete_ascii "srv1.fleet.test"
+    [ "$status" -eq 0 ]
+    [ ! -f "$HOME/.data/welcome_srv1.ascii" ]
+    [[ "$output" == *"✓"* ]]
+}
+
+@test "delete_ascii: ASCII file absent → exit 0, no error" {
+    export DATA_DIR="$HOME/.data"
+    run delete_ascii "noserver.fleet.test"
+    [ "$status" -eq 0 ]
+}

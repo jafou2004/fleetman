@@ -47,3 +47,13 @@ uninstall_local() {
     fi
     ok "Fleetman uninstalled from local server"
 }
+
+delete_ascii() {
+    local fqdn="$1"
+    local ascii_file
+    ascii_file="$DATA_DIR/welcome_$(short_name "$fqdn").ascii"
+    if [[ -f "$ascii_file" ]]; then
+        rm -f "$ascii_file"
+        ok "ASCII art deleted — $ascii_file"
+    fi
+}

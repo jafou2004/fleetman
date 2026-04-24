@@ -6,9 +6,13 @@ load '../../../../test_helper/common'
 setup() {
     load_common
     source "$SCRIPTS_DIR/commands/config/server/remove.sh"
-    # Mock interactive menus to avoid TTY requirements
+    # Mock interactive menus and shared lib functions
     select_menu()          { SELECTED_IDX=0; }
     select_menu_disabled() { SELECTED_IDX=0; }
+    get_git_server()       { :; }
+    delete_ascii()         { :; }
+    select_env_colored()   { SELECTED_ENV="${2:-dev}"; }
+    run_sync_or_warn()     { :; }
 }
 
 # ── Option parsing ─────────────────────────────────────────────────────────────
@@ -24,29 +28,6 @@ setup() {
     run cmd_config_server_remove
     [ "$status" -eq 1 ]
     [[ "$output" == *"⚠"* ]]
-}
-
-@test "cmd_config_server_remove: -e invalid_env → exit 1" {
-    run cmd_config_server_remove -e nosuchenv
-    [ "$status" -eq 1 ]
-    [[ "$output" == *"nosuchenv"* ]]
-}
-
-# ── _get_git_server ────────────────────────────────────────────────────────────
-
-@test "_get_git_server: reads FQDN from GIT_SERVER_FILE" {
-    echo "git1.fleet.test" > "$HOME/.data/git_server"
-    export GIT_SERVER_FILE="$HOME/.data/git_server"
-    run _get_git_server
-    [ "$status" -eq 0 ]
-    [ "$output" = "git1.fleet.test" ]
-}
-
-@test "_get_git_server: returns empty when file absent" {
-    export GIT_SERVER_FILE="$HOME/.data/git_server_absent"
-    run _get_git_server
-    [ "$status" -eq 0 ]
-    [ -z "$output" ]
 }
 
 # ── _remove_from_config ────────────────────────────────────────────────────────
@@ -70,21 +51,6 @@ setup() {
     run _remove_from_config "dev" "dev1.fleet.test"
     [ "$status" -eq 0 ]
     [[ "$output" == *"✓"* ]]
-}
-
-# ── _delete_ascii ──────────────────────────────────────────────────────────────
-
-@test "_delete_ascii: removes welcome_<short>.ascii when present" {
-    touch "$HOME/.data/welcome_dev1.ascii"
-    export DATA_DIR="$HOME/.data"
-    _delete_ascii "dev1.fleet.test"
-    [ ! -f "$HOME/.data/welcome_dev1.ascii" ]
-}
-
-@test "_delete_ascii: no error when file absent" {
-    export DATA_DIR="$HOME/.data"
-    run _delete_ascii "noserver.fleet.test"
-    [ "$status" -eq 0 ]
 }
 
 # ── is_local_server ────────────────────────────────────────────────────────────
@@ -118,13 +84,17 @@ setup() {
         source '$SCRIPTS_DIR/lib/config.sh'
         source '$SCRIPTS_DIR/lib/ui.sh'
         source '$SCRIPTS_DIR/lib/auth.sh'
+        source '$SCRIPTS_DIR/lib/uninstall.sh'
         source '$SCRIPTS_DIR/commands/config/server/remove.sh'
         select_menu()          { SELECTED_IDX=0; }
         select_menu_disabled() { SELECTED_IDX=0; }
+        get_git_server()       { :; }
+        delete_ascii()         { :; }
+        select_env_colored()   { SELECTED_ENV='dev'; }
+        run_sync_or_warn()     { :; }
         prompt_confirm()       { return 1; }
         export HOME='$HOME'
         export CONFIG_FILE='$CONFIG_FILE'
-        export GIT_SERVER_FILE='$HOME/.data/git_server_absent'
         cmd_config_server_remove -e dev
     "
     [ "$status" -eq 0 ]

@@ -432,3 +432,89 @@ _smd_run() {
     [[ "${labels[0]}" == *"dev1"* ]]
     [[ "${labels[1]}" == *"prod2"* ]]
 }
+
+# ── select_env_colored ─────────────────────────────────────────────────────────
+
+@test "select_env_colored: -e dev (valid) → SELECTED_ENV=dev, exit 0" {
+    run bash -c "
+        source '$SCRIPTS_DIR/lib/vars.sh'
+        source '$SCRIPTS_DIR/lib/display.sh'
+        source '$SCRIPTS_DIR/lib/config.sh'
+        source '$SCRIPTS_DIR/lib/ui.sh'
+        export CONFIG_FILE='$CONFIG_FILE'
+        select_env_colored 'Pick env:' 'dev'
+        echo \"\$SELECTED_ENV\"
+    "
+    [ "$status" -eq 0 ]
+    [ "$output" = "dev" ]
+}
+
+@test "select_env_colored: -e nosuchenv → exit 1 + env name in output" {
+    run bash -c "
+        source '$SCRIPTS_DIR/lib/vars.sh'
+        source '$SCRIPTS_DIR/lib/display.sh'
+        source '$SCRIPTS_DIR/lib/config.sh'
+        source '$SCRIPTS_DIR/lib/ui.sh'
+        export CONFIG_FILE='$CONFIG_FILE'
+        select_env_colored 'Pick env:' 'nosuchenv'
+    "
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"nosuchenv"* ]]
+}
+
+@test "select_env_colored: interactive SELECTED_IDX=0 → first env from config" {
+    run bash -c "
+        source '$SCRIPTS_DIR/lib/vars.sh'
+        source '$SCRIPTS_DIR/lib/display.sh'
+        source '$SCRIPTS_DIR/lib/config.sh'
+        source '$SCRIPTS_DIR/lib/ui.sh'
+        export CONFIG_FILE='$CONFIG_FILE'
+        select_menu() { SELECTED_IDX=0; }
+        select_env_colored 'Pick env:'
+        echo \"\$SELECTED_ENV\"
+    "
+    [ "$status" -eq 0 ]
+    first_env=$(jq -r '.servers | keys[0]' "$CONFIG_FILE")
+    [[ "$output" == *"$first_env"* ]]
+}
+
+@test "select_env_colored: config absent → exit 1" {
+    run bash -c "
+        source '$SCRIPTS_DIR/lib/vars.sh'
+        source '$SCRIPTS_DIR/lib/display.sh'
+        source '$SCRIPTS_DIR/lib/config.sh'
+        source '$SCRIPTS_DIR/lib/ui.sh'
+        export CONFIG_FILE='/nonexistent/config.json'
+        select_env_colored 'Pick env:' 'dev'
+    "
+    [ "$status" -eq 1 ]
+}
+
+# ── run_sync_or_warn ───────────────────────────────────────────────────────────
+
+@test "run_sync_or_warn: binary present → outputs Synchronisation section" {
+    mkdir -p "$BATS_TEST_TMPDIR/bin"
+    printf '#!/bin/bash\nexit 0\n' > "$BATS_TEST_TMPDIR/bin/fleetman"
+    chmod +x "$BATS_TEST_TMPDIR/bin/fleetman"
+    run bash -c "
+        source '$SCRIPTS_DIR/lib/vars.sh'
+        source '$SCRIPTS_DIR/lib/display.sh'
+        source '$SCRIPTS_DIR/lib/ui.sh'
+        SCRIPTS_DIR='$BATS_TEST_TMPDIR'
+        run_sync_or_warn
+    "
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Synchronisation"* ]]
+}
+
+@test "run_sync_or_warn: binary absent → warns 'not found'" {
+    run bash -c "
+        source '$SCRIPTS_DIR/lib/vars.sh'
+        source '$SCRIPTS_DIR/lib/display.sh'
+        source '$SCRIPTS_DIR/lib/ui.sh'
+        SCRIPTS_DIR='$BATS_TEST_TMPDIR'
+        run_sync_or_warn
+    "
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"not found"* ]]
+}

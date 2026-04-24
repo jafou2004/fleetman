@@ -30,12 +30,6 @@ source "$_LIB/uninstall.sh"
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
-_get_git_server() {
-    if [[ -f "$GIT_SERVER_FILE" ]]; then
-        cat "$GIT_SERVER_FILE"
-    fi
-}
-
 _remove_env_from_config() {
     local env="$1"
     local tmp
@@ -50,24 +44,13 @@ _remove_env_from_config() {
     ok "Environment '$env' removed from config.json"
 }
 
-_delete_ascii() {
-    local fqdn="$1"
-    local ascii_file
-    ascii_file="$DATA_DIR/welcome_$(short_name "$fqdn").ascii"
-    if [[ -f "$ascii_file" ]]; then
-        rm -f "$ascii_file"
-        ok "ASCII art deleted — $ascii_file"
-    fi
-}
-
 # ── Main ───────────────────────────────────────────────────────────────────────
 
 cmd_config_env_remove() {
     local OPTIND=1 _env_flag=""
-    while getopts ":e:h" _opt "$@"; do
+    while getopts ":e:" _opt "$@"; do
         case "$_opt" in
             e) _env_flag="$OPTARG" ;;
-            h) grep -A999 '^# Usage' "${BASH_SOURCE[0]}" | grep -m1 -A999 '^##$' | head -n-1 | sed 's/^# //' | sed 's/^#$//' | sed 's/^##//'; exit 0 ;;
             \?) err "Unknown option: -$OPTARG"; exit 1 ;;
             :)  err "Option -$OPTARG requires an argument."; exit 1 ;;
         esac
@@ -80,32 +63,12 @@ cmd_config_env_remove() {
 
     # ── Env selection ──────────────────────────────────────────────────
     local selected_env
-    if [[ -n "$_env_flag" ]]; then
-        if ! jq -e --arg e "$_env_flag" '.servers | has($e)' "$CONFIG_FILE" > /dev/null 2>&1; then
-            local _valid
-            _valid=$(jq -r '[.servers | keys[]] | join(", ")' "$CONFIG_FILE")
-            err "Invalid environment '$_env_flag'. Valid: $_valid"
-            exit 1
-        fi
-        selected_env="$_env_flag"
-    else
-        local -a _env_names=()
-        mapfile -t _env_names < <(jq -r '.servers | keys[]' "$CONFIG_FILE")
-        local -a _env_labels=()
-        local _e _color _bg
-        for _e in "${_env_names[@]}"; do
-            _color=$(jq -r --arg e "$_e" '.env_colors[$e] // "white"' "$CONFIG_FILE")
-            _bg=$(env_color_ansi "$_color" bg)
-            _env_labels+=("$(printf "${_bg}%s${NC}" "$_e")")
-        done
-        printf "Select the environment to remove:\n"
-        select_menu _env_labels
-        selected_env="${_env_names[$SELECTED_IDX]}"
-    fi
+    select_env_colored "Select the environment to remove:" "$_env_flag"
+    selected_env="$SELECTED_ENV"
 
     # ── Git clone protection ───────────────────────────────────────────
     local _git_server _gs_short
-    _git_server=$(_get_git_server)
+    _git_server=$(get_git_server)
     if [[ -n "$_git_server" ]]; then
         _gs_short=$(short_name "$_git_server")
         local _s
@@ -145,8 +108,6 @@ cmd_config_env_remove() {
         fi
     done
 
-    local _fleetman="$SCRIPTS_DIR/bin/fleetman"
-
     # ── Uninstall remote servers ───────────────────────────────────────
     section "Uninstall — $selected_env"
     for _s in "${_servers[@]}"; do
@@ -158,7 +119,7 @@ cmd_config_env_remove() {
 
     # ── Delete ASCII art files ─────────────────────────────────────────
     for _s in "${_servers[@]}"; do
-        _delete_ascii "$_s"
+        delete_ascii "$_s"
     done
     echo ""
 
@@ -169,22 +130,14 @@ cmd_config_env_remove() {
 
     # ── Sync + optional local uninstall ───────────────────────────────
     if [[ -n "$_local_server" ]]; then
-        if [[ -f "$_fleetman" ]]; then
-            section "Synchronisation"
-            bash "$_fleetman" sync -q
-            echo ""
-        fi
+        run_sync_or_warn
+        echo ""
         section "Uninstall local — $(short_name "$_local_server")"
         uninstall_local
         echo ""
         warn "This server is no longer in the fleet"
     else
-        if [[ -f "$_fleetman" ]]; then
-            section "Synchronisation"
-            bash "$_fleetman" sync -q
-        else
-            warn "fleetman not found — run 'fleetman sync' manually"
-        fi
+        run_sync_or_warn
     fi
 
     unset PASSWORD
