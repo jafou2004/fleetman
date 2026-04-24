@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - `fleetman config server remove` — removes a server from the fleet
+- `fleetman config env remove` — removes an entire environment from the fleet
 
 ## [0.0.4] - 2026-04-16
 

@@ -1,13 +1,13 @@
 #!/bin/bash
 
 ##
-# @menu Remove server
-# @order 2
+# @menu Remove environment
+# @order 3
 #
-# Removes a server from the fleet: uninstalls fleetman, updates config.json,
-# deletes its ASCII art file, then runs a quick sync.
+# Removes an environment from the fleet: uninstalls fleetman on all its
+# servers, updates config.json, deletes ASCII art files, then runs a quick sync.
 #
-# Usage: fleetman config server remove [-e <env>] [-h]
+# Usage: fleetman config env remove [-e <env>] [-h]
 #
 # Options:
 #   -e <env>     Target environment (skips interactive env menu)
@@ -36,18 +36,18 @@ _get_git_server() {
     fi
 }
 
-_remove_from_config() {
-    local env="$1" fqdn="$2"
+_remove_env_from_config() {
+    local env="$1"
     local tmp
     tmp=$(mktemp)
-    if ! jq --arg e "$env" --arg s "$fqdn" \
-        '.servers[$e] = [.servers[$e][] | select(. != $s)]' \
+    if ! jq --arg e "$env" \
+        'del(.servers[$e]) | del(.env_colors[$e])' \
         "$CONFIG_FILE" > "$tmp" || ! mv "$tmp" "$CONFIG_FILE"; then
         rm -f "$tmp"
         err "Failed to write config"
         return 1
     fi
-    ok "Server '$fqdn' removed from config.json"
+    ok "Environment '$env' removed from config.json"
 }
 
 _delete_ascii() {
@@ -62,11 +62,12 @@ _delete_ascii() {
 
 # ── Main ───────────────────────────────────────────────────────────────────────
 
-cmd_config_server_remove() {
+cmd_config_env_remove() {
     local OPTIND=1 _env_flag=""
-    while getopts ":e:" _opt "$@"; do
+    while getopts ":e:h" _opt "$@"; do
         case "$_opt" in
             e) _env_flag="$OPTARG" ;;
+            h) grep -A999 '^# Usage' "${BASH_SOURCE[0]}" | grep -m1 -A999 '^##$' | head -n-1 | sed 's/^# //' | sed 's/^#$//' | sed 's/^##//'; exit 0 ;;
             \?) err "Unknown option: -$OPTARG"; exit 1 ;;
             :)  err "Option -$OPTARG requires an argument."; exit 1 ;;
         esac
@@ -75,7 +76,7 @@ cmd_config_server_remove() {
 
     check_config_file
 
-    section "Configuration — remove server"
+    section "Configuration — remove environment"
 
     # ── Env selection ──────────────────────────────────────────────────
     local selected_env
@@ -97,12 +98,26 @@ cmd_config_server_remove() {
             _bg=$(env_color_ansi "$_color" bg)
             _env_labels+=("$(printf "${_bg}%s${NC}" "$_e")")
         done
-        printf "Select the target environment:\n"
+        printf "Select the environment to remove:\n"
         select_menu _env_labels
         selected_env="${_env_names[$SELECTED_IDX]}"
     fi
 
-    # ── Server list for env ────────────────────────────────────────────
+    # ── Git clone protection ───────────────────────────────────────────
+    local _git_server _gs_short
+    _git_server=$(_get_git_server)
+    if [[ -n "$_git_server" ]]; then
+        _gs_short=$(short_name "$_git_server")
+        local _s
+        while IFS= read -r _s; do
+            if [[ "$(short_name "$_s")" == "$_gs_short" ]]; then
+                err "Cannot remove '$selected_env': contains git clone server '$_gs_short'"
+                exit 1
+            fi
+        done < <(jq -r --arg e "$selected_env" '.servers[$e][]' "$CONFIG_FILE" 2>/dev/null)
+    fi
+
+    # ── Server list ────────────────────────────────────────────────────
     local -a _servers=()
     mapfile -t _servers < <(jq -r --arg e "$selected_env" '.servers[$e][]' "$CONFIG_FILE" 2>/dev/null)
 
@@ -111,71 +126,59 @@ cmd_config_server_remove() {
         exit 0
     fi
 
-    local _git_server
-    _git_server=$(_get_git_server)
-
-    local -a _labels=() _disabled=()
-    local _i _fqdn _short _color _bg
-    for _i in "${!_servers[@]}"; do
-        _fqdn="${_servers[$_i]}"
-        _short=$(short_name "$_fqdn")
-        _color=$(jq -r --arg e "$selected_env" '.env_colors[$e] // "white"' "$CONFIG_FILE")
-        _bg=$(env_color_ansi "$_color" bg)
-        if [[ -n "$_git_server" ]] && \
-           [[ "$(short_name "$_fqdn")" == "$(short_name "$_git_server")" ]]; then
-            _labels+=("$(printf "%s ${_bg}[%s]${NC}  (git clone)" "$_short" "${selected_env^^}")")
-            _disabled+=("$_i")
-        else
-            _labels+=("$(printf "%s ${_bg}[%s]${NC}" "$_short" "${selected_env^^}")")
-        fi
-    done
-
-    if [[ ${#_disabled[@]} -ge ${#_servers[@]} ]]; then
-        warn "No removable server in '$selected_env' — git clone server is protected"
-        exit 0
-    fi
-
-    printf "\nSelect the server to remove:\n"
-    select_menu_disabled _labels _disabled
-    local _target="${_servers[$SELECTED_IDX]}"
-    echo ""
-
     # ── Confirmation ───────────────────────────────────────────────────
-    if ! prompt_confirm "Remove '$(short_name "$_target")' from '$selected_env'?" N; then
+    if ! prompt_confirm "Remove environment '$selected_env' and uninstall ${#_servers[@]} server(s)?" N; then
         warn "Aborted"
         exit 0
     fi
     echo ""
 
-    # ── Execute ────────────────────────────────────────────────────────
+    check_sshpass
+    ask_password
+
+    # ── Detect local server ────────────────────────────────────────────
+    local _local_server="" _s
+    for _s in "${_servers[@]}"; do
+        if is_local_server "$_s"; then
+            _local_server="$_s"
+            break
+        fi
+    done
+
     local _fleetman="$SCRIPTS_DIR/bin/fleetman"
 
-    if is_local_server "$_target"; then
-        warn "Fleetman will be uninstalled from this server after sync"
-        echo ""
-        section "Updating config"
-        _remove_from_config "$selected_env" "$_target"
-        _delete_ascii "$_target"
-        echo ""
+    # ── Uninstall remote servers ───────────────────────────────────────
+    section "Uninstall — $selected_env"
+    for _s in "${_servers[@]}"; do
+        if [[ "$_s" != "$_local_server" ]]; then
+            uninstall_remote "$_s"
+            echo ""
+        fi
+    done
+
+    # ── Delete ASCII art files ─────────────────────────────────────────
+    for _s in "${_servers[@]}"; do
+        _delete_ascii "$_s"
+    done
+    echo ""
+
+    # ── Update config ──────────────────────────────────────────────────
+    section "Updating config"
+    _remove_env_from_config "$selected_env"
+    echo ""
+
+    # ── Sync + optional local uninstall ───────────────────────────────
+    if [[ -n "$_local_server" ]]; then
         if [[ -f "$_fleetman" ]]; then
             section "Synchronisation"
             bash "$_fleetman" sync -q
             echo ""
         fi
-        section "Uninstall local — $(short_name "$_target")"
+        section "Uninstall local — $(short_name "$_local_server")"
         uninstall_local
         echo ""
         warn "This server is no longer in the fleet"
     else
-        check_sshpass
-        ask_password
-        section "Uninstall — $(short_name "$_target")"
-        uninstall_remote "$_target"
-        echo ""
-        section "Updating config"
-        _remove_from_config "$selected_env" "$_target"
-        _delete_ascii "$_target"
-        echo ""
         if [[ -f "$_fleetman" ]]; then
             section "Synchronisation"
             bash "$_fleetman" sync -q

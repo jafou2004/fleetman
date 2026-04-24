@@ -30,3 +30,11 @@ setup() {
     [ "$status" -eq 0 ]
     [[ "$output" == *"ADD_CALLED"* ]]
 }
+
+@test "cmd_config_env: selection 2 (Remove environment) → calls cmd_config_env_remove" {
+    cmd_config_env_remove() { echo "REMOVE_CALLED"; }
+    select_menu() { SELECTED_IDX=2; }
+    run cmd_config_env
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"REMOVE_CALLED"* ]]
+}

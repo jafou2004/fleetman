@@ -173,7 +173,7 @@ Ports are scanned across all environments and servers so a port reserved in `dev
 ```bash
 fleetman config               # Interactive config menu
 fleetman config parallel      # Set the number of parallel SSH jobs
-fleetman config env           # Manage environments (add, change color)
+fleetman config env           # Manage environments (add, change color, remove)
 fleetman config server        # Manage servers (add, remove)
 fleetman config status        # Manage status check containers
 fleetman config templatevars  # Manage template_vars
@@ -280,6 +280,10 @@ Set `pin` to a specific version (e.g. `"v1.2.0"`) to lock the fleet to that rele
 ### Removing a server
 
 Run `fleetman config server remove` — selects the environment and server interactively, uninstalls fleetman from it, updates `config.json`, and runs a quick sync. The git clone server is protected and cannot be selected. If the local server is targeted, sync runs first, then fleetman uninstalls itself last.
+
+### Removing an environment
+
+Run `fleetman config env remove` — selects the environment interactively (or pass `-e <env>`), uninstalls fleetman from all its servers, updates `config.json`, and runs a quick sync. The environment containing the git clone server is protected and cannot be removed. If the local server is in the targeted environment, sync runs first, then fleetman uninstalls itself last.
 
 ### Rotating the fleet password
 

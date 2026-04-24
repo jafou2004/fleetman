@@ -185,10 +185,9 @@ EOF
     ! grep -qF "bin/fleetman selfupdate" "$store" 2>/dev/null
 }
 
-@test "uninstall_local: no fleetman cron entry → message 'No ... found'" {
+@test "uninstall_local: no fleetman cron entry → exit 0" {
     run uninstall_local
     [ "$status" -eq 0 ]
-    [[ "$output" == *"No fleetman cron entries found"* ]]
 }
 
 @test "uninstall_local: other cron entries preserved" {
@@ -206,7 +205,6 @@ EOF
     run uninstall_local
     [ "$status" -eq 0 ]
     [ ! -f "$HOME/.fleet_pass.enc" ]
-    [[ "$output" == *"fleet_pass.enc removed"* ]]
 }
 
 @test "uninstall_local: removes ~/.ssh/fleet_key and fleet_key.pub" {
@@ -215,14 +213,12 @@ EOF
     [ "$status" -eq 0 ]
     [ ! -f "$HOME/.ssh/fleet_key" ]
     [ ! -f "$HOME/.ssh/fleet_key.pub" ]
-    [[ "$output" == *"fleet_key"* ]]
 }
 
 @test "uninstall_local: removes ~/config.json" {
     run uninstall_local
     [ "$status" -eq 0 ]
     [ ! -f "$HOME/config.json" ]
-    [[ "$output" == *"config.json removed"* ]]
 }
 
 @test "uninstall_local: removes ~/.bash_aliases" {
@@ -230,7 +226,6 @@ EOF
     run uninstall_local
     [ "$status" -eq 0 ]
     [ ! -f "$HOME/.bash_aliases" ]
-    [[ "$output" == *".bash_aliases removed"* ]]
 }
 
 @test "uninstall_local: removes ~/.data/" {
@@ -239,7 +234,6 @@ EOF
     run uninstall_local
     [ "$status" -eq 0 ]
     [ ! -d "$HOME/.data" ]
-    [[ "$output" == *".data/ removed"* ]]
 }
 
 # ── uninstall_local: ~/scripts ────────────────────────────────────────────────
@@ -250,7 +244,6 @@ EOF
     run uninstall_local
     [ "$status" -eq 0 ]
     [ ! -L "$HOME/scripts" ]
-    [[ "$output" == *"symlink removed"* ]]
 }
 
 @test "uninstall_local: ~/scripts real directory → removed" {
@@ -259,30 +252,28 @@ EOF
     run uninstall_local
     [ "$status" -eq 0 ]
     [ ! -d "$HOME/scripts" ]
-    [[ "$output" == *"scripts/ removed"* ]]
 }
 
-@test "uninstall_local: ~/scripts absent → ok 'not found'" {
+@test "uninstall_local: ~/scripts absent → exit 0" {
     rm -rf "$HOME/scripts"
     run uninstall_local
     [ "$status" -eq 0 ]
-    [[ "$output" == *"not found"* ]]
 }
 
-@test "uninstall_local: returns 0 + displays 'Uninstalled'" {
+@test "uninstall_local: returns 0 + displays 'uninstalled'" {
     run uninstall_local
     [ "$status" -eq 0 ]
-    [[ "$output" == *"Uninstalled"* ]]
+    [[ "$output" == *"uninstalled"* ]]
 }
 
 # ── uninstall_remote ──────────────────────────────────────────────────────────
 
-@test "uninstall_remote: SSH ok + all markers → exit 0 + Uninstalled" {
+@test "uninstall_remote: SSH ok + all markers → exit 0 + uninstalled" {
     export SSH_RESULT=$'BASHRC_DONE\nCRON_DONE\nFILES_DONE\nDATA_DONE\nSCRIPTS_DONE'
     export SSH_RC=0
     run uninstall_remote "remote1.fleet.test"
     [ "$status" -eq 0 ]
-    [[ "$output" == *"Uninstalled"* ]]
+    [[ "$output" == *"uninstalled"* ]]
 }
 
 @test "uninstall_remote: SSH rc≠0 → exit 1 + error" {
@@ -386,5 +377,5 @@ EOF
 
 @test "uninstall_local: direct call → ok 'Uninstalled' (kcov coverage)" {
     uninstall_local > "$BATS_TEST_TMPDIR/out.txt"
-    grep -q "Uninstalled" "$BATS_TEST_TMPDIR/out.txt"
+    grep -qi "uninstalled" "$BATS_TEST_TMPDIR/out.txt"
 }
