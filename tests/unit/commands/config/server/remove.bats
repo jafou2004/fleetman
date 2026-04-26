@@ -103,3 +103,99 @@ setup() {
     after=$(cat "$CONFIG_FILE")
     [ "$before" = "$after" ]
 }
+
+# ── No servers in env ──────────────────────────────────────────────────────────
+
+@test "cmd_config_server_remove: env with 0 servers → exit 0 + ⚠" {
+    local tmp
+    tmp=$(mktemp)
+    jq '.servers.dev = []' "$CONFIG_FILE" > "$tmp" && mv "$tmp" "$CONFIG_FILE"
+    run cmd_config_server_remove -e dev
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"⚠"* ]]
+}
+
+# ── Git clone is the only server → all disabled ────────────────────────────────
+
+@test "cmd_config_server_remove: git clone is only server → exit 0 + protected" {
+    local tmp
+    tmp=$(mktemp)
+    jq '.servers.dev = ["dev1.fleet.test"]' "$CONFIG_FILE" > "$tmp" && mv "$tmp" "$CONFIG_FILE"
+    get_git_server() { echo "dev1.fleet.test"; }
+    run cmd_config_server_remove -e dev
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"protected"* ]]
+}
+
+# ── Remote server happy path ───────────────────────────────────────────────────
+
+@test "cmd_config_server_remove: remote server → uninstall_remote called" {
+    local call_file="$BATS_TEST_TMPDIR/uninstall_called"
+    prompt_confirm()   { return 0; }
+    is_local_server()  { return 1; }
+    check_sshpass()    { :; }
+    ask_password()     { :; }
+    uninstall_remote() { echo "UNINSTALL:$1" > "$call_file"; }
+    run cmd_config_server_remove -e dev
+    [ "$status" -eq 0 ]
+    [ -f "$call_file" ]
+    grep -q "dev1.fleet.test" "$call_file"
+}
+
+@test "cmd_config_server_remove: remote server → server removed from config" {
+    prompt_confirm()   { return 0; }
+    is_local_server()  { return 1; }
+    check_sshpass()    { :; }
+    ask_password()     { :; }
+    uninstall_remote() { :; }
+    run cmd_config_server_remove -e dev
+    [ "$status" -eq 0 ]
+    local remaining
+    remaining=$(jq -r '.servers.dev[]' "$CONFIG_FILE")
+    [[ "$remaining" != *"dev1.fleet.test"* ]]
+    [[ "$remaining" == *"dev2.fleet.test"* ]]
+}
+
+# ── Local server happy path ────────────────────────────────────────────────────
+
+@test "cmd_config_server_remove: local server → uninstall_local called after sync" {
+    local local_file="$BATS_TEST_TMPDIR/local_uninstall"
+    local sync_file="$BATS_TEST_TMPDIR/sync_ran"
+    prompt_confirm()   { return 0; }
+    is_local_server()  { return 0; }
+    uninstall_local()  { touch "$local_file"; }
+    run_sync_or_warn() { touch "$sync_file"; }
+    run cmd_config_server_remove -e dev
+    [ "$status" -eq 0 ]
+    [ -f "$local_file" ]
+    [ -f "$sync_file" ]
+}
+
+@test "cmd_config_server_remove: local server → prints 'no longer in the fleet'" {
+    prompt_confirm()  { return 0; }
+    is_local_server() { return 0; }
+    uninstall_local() { :; }
+    run cmd_config_server_remove -e dev
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"no longer"* ]]
+}
+
+@test "cmd_config_server_remove: local server → server removed from config" {
+    prompt_confirm()  { return 0; }
+    is_local_server() { return 0; }
+    uninstall_local() { :; }
+    run cmd_config_server_remove -e dev
+    [ "$status" -eq 0 ]
+    local remaining
+    remaining=$(jq -r '.servers.dev[]' "$CONFIG_FILE")
+    [[ "$remaining" != *"dev1.fleet.test"* ]]
+}
+
+# ── _remove_from_config failure ────────────────────────────────────────────────
+
+@test "_remove_from_config: jq failure → return 1 + ✗" {
+    jq() { return 1; }
+    run _remove_from_config "dev" "dev1.fleet.test"
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"✗"* ]]
+}

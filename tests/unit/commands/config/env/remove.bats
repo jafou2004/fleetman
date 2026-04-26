@@ -109,3 +109,74 @@ setup() {
     after=$(cat "$CONFIG_FILE")
     [ "$before" = "$after" ]
 }
+
+# ── Remote-only env happy path ────────────────────────────────────────────────
+
+@test "cmd_config_env_remove: remote-only env → uninstall_remote called for each server" {
+    local call_file="$BATS_TEST_TMPDIR/uninstall_calls"
+    uninstall_remote() { echo "UNINSTALL:$1" >> "$call_file"; }
+    run cmd_config_env_remove -e dev
+    [ "$status" -eq 0 ]
+    [ -f "$call_file" ]
+    grep -q "dev1.fleet.test" "$call_file"
+    grep -q "dev2.fleet.test" "$call_file"
+}
+
+@test "cmd_config_env_remove: remote-only env → env removed from config" {
+    run cmd_config_env_remove -e dev
+    [ "$status" -eq 0 ]
+    [ "$(jq '.servers | has("dev")' "$CONFIG_FILE")" = "false" ]
+    [ "$(jq '.env_colors | has("dev")' "$CONFIG_FILE")" = "false" ]
+}
+
+@test "cmd_config_env_remove: remote-only env → sync called" {
+    local sync_file="$BATS_TEST_TMPDIR/sync_ran"
+    run_sync_or_warn() { touch "$sync_file"; }
+    run cmd_config_env_remove -e dev
+    [ "$status" -eq 0 ]
+    [ -f "$sync_file" ]
+}
+
+# ── Env with local server ─────────────────────────────────────────────────────
+
+@test "cmd_config_env_remove: env with local server → uninstall_local called, remote loop skips it" {
+    local call_file="$BATS_TEST_TMPDIR/uninstall_calls"
+    local local_file="$BATS_TEST_TMPDIR/local_uninstall"
+    is_local_server()  { [[ "$1" == "dev1.fleet.test" ]]; }
+    uninstall_remote() { echo "UNINSTALL:$1" >> "$call_file"; }
+    uninstall_local()  { touch "$local_file"; }
+    run cmd_config_env_remove -e dev
+    [ "$status" -eq 0 ]
+    [ -f "$local_file" ]
+    [ -f "$call_file" ]
+    ! grep -q "dev1.fleet.test" "$call_file"
+    grep -q "dev2.fleet.test" "$call_file"
+}
+
+@test "cmd_config_env_remove: env with local server → prints 'no longer in the fleet'" {
+    is_local_server() { [[ "$1" == "dev1.fleet.test" ]]; }
+    uninstall_local() { :; }
+    run cmd_config_env_remove -e dev
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"no longer"* ]]
+}
+
+@test "cmd_config_env_remove: env with local server → sync called before local uninstall" {
+    local order_file="$BATS_TEST_TMPDIR/order"
+    is_local_server()  { [[ "$1" == "dev1.fleet.test" ]]; }
+    run_sync_or_warn() { echo "sync" >> "$order_file"; }
+    uninstall_local()  { echo "local" >> "$order_file"; }
+    run cmd_config_env_remove -e dev
+    [ "$status" -eq 0 ]
+    [ "$(sed -n '1p' "$order_file")" = "sync" ]
+    [ "$(sed -n '2p' "$order_file")" = "local" ]
+}
+
+# ── _remove_env_from_config failure ───────────────────────────────────────────
+
+@test "_remove_env_from_config: jq failure → return 1 + ✗" {
+    jq() { return 1; }
+    run _remove_env_from_config "dev"
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"✗"* ]]
+}

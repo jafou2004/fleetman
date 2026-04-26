@@ -145,6 +145,60 @@ setup() {
     [ "$success_count" -eq 1 ]
 }
 
+@test "_IS_parse_result: clean output exit=0 → status=ok, detail='ok'" {
+    local tmpfile
+    tmpfile=$(mktemp)
+    echo "some output without symbols" > "$tmpfile"
+    success_count=0
+
+    local _status _detail
+    _IS_parse_result "$tmpfile" 0
+    rm -f "$tmpfile"
+
+    [ "$_status" = "ok" ]
+    [ "$_detail" = "ok" ]
+    [ "$success_count" -eq 1 ]
+}
+
+@test "_IS_parse_result: non-zero exit, no ✗ line → detail='failed'" {
+    local tmpfile
+    tmpfile=$(mktemp)
+    echo "some output without symbols" > "$tmpfile"
+    failure_count=0
+
+    local _status _detail
+    _IS_parse_result "$tmpfile" 1
+    rm -f "$tmpfile"
+
+    [ "$_status" = "err" ]
+    [ "$_detail" = "failed" ]
+    [ "$failure_count" -eq 1 ]
+}
+
+@test "_IS_parse_result: extracts detail from ⚠ message" {
+    local tmpfile
+    tmpfile=$(mktemp)
+    echo "  ⚠ Already synced" > "$tmpfile"
+
+    local _status _detail
+    _IS_parse_result "$tmpfile" 0
+    rm -f "$tmpfile"
+
+    [ "$_detail" = "Already synced" ]
+}
+
+@test "_IS_parse_result: extracts detail from ✓ message" {
+    local tmpfile
+    tmpfile=$(mktemp)
+    echo "  ✓ Deployment complete" > "$tmpfile"
+
+    local _status _detail
+    _IS_parse_result "$tmpfile" 0
+    rm -f "$tmpfile"
+
+    [ "$_detail" = "Deployment complete" ]
+}
+
 # ── iterate_servers (sequential mode) ────────────────────────────────────────
 
 @test "iterate_servers: calls local_fn for MASTER_HOST" {
@@ -185,6 +239,51 @@ setup() {
     iterate_servers _ok_fn _ok_fn
     [ "$success_count" -eq 1 ]
     [ "$failure_count" -eq 0 ]
+}
+
+@test "iterate_servers: remote fn emitting ✗ → failure_count incremented" {
+    _fail_remote() { err "connection refused"; }
+    _noop_local()  { ok "local"; }
+
+    MASTER_HOST="__not_a_real_host__"
+    ENV="test"
+    failure_count=0
+
+    iterate_servers _noop_local _fail_remote
+    [ "$failure_count" -eq 1 ]
+    [ "$success_count" -eq 0 ]
+}
+
+@test "iterate_servers: custom server list (3rd param) → only those servers processed" {
+    local remote_calls=0
+    declare -ga _custom_list=("test1.fleet.test")
+    _cust_local()  { ok "local"; }
+    _cust_remote() { remote_calls=$(( remote_calls + 1 )); ok "remote $1"; }
+
+    MASTER_HOST="__not_a_real_host__"
+    ENV=""  # no filter — should be overridden by custom list
+
+    iterate_servers _cust_local _cust_remote "_custom_list"
+    [ "$remote_calls" -eq 1 ]
+    [ "$success_count" -eq 1 ]
+}
+
+@test "iterate_servers: local_last=1 → local processed after remotes" {
+    local order_file="$BATS_TEST_TMPDIR/order_local_last"
+    _ll_local()  { echo "local"        >> "$order_file"; ok "local"; }
+    _ll_remote() { echo "remote:$1"    >> "$order_file"; ok "remote"; }
+
+    MASTER_HOST="dev1.fleet.test"
+    ENV="dev"  # dev1 (local) + dev2 (remote)
+
+    iterate_servers _ll_local _ll_remote "" 1
+
+    # First line must be the remote, last must be local
+    local first last
+    first=$(head -1 "$order_file")
+    last=$(tail -1 "$order_file")
+    [ "$first" = "remote:dev2.fleet.test" ]
+    [ "$last" = "local" ]
 }
 
 # ── append_result ──────────────────────────────────────────────────────────────
@@ -371,6 +470,59 @@ setup() {
     [[ "$output" == *"Deployed OK"* ]]
 }
 
+@test "_IS_collect_result: displays ⚠ result line for warn" {
+    local tmpfile
+    tmpfile=$(mktemp)
+    echo "  ⚠ Already done" > "$tmpfile"
+    echo 0 > "${tmpfile}.exit"
+    touch "${tmpfile}.done"
+    _IS_pid_short[55555]="warnserver"
+    _IS_pid_tmpfile[55555]="$tmpfile"
+    _IS_active=(55555)
+    _IS_done=0
+
+    run _IS_collect_result 55555
+
+    [[ "$output" == *"⚠"* ]]
+    [[ "$output" == *"warnserver"* ]]
+    [[ "$output" == *"Already done"* ]]
+}
+
+@test "_IS_collect_result: displays ✗ result line for err" {
+    local tmpfile
+    tmpfile=$(mktemp)
+    echo "  ✗ SSH timeout" > "$tmpfile"
+    echo 1 > "${tmpfile}.exit"
+    touch "${tmpfile}.done"
+    _IS_pid_short[55556]="errserver"
+    _IS_pid_tmpfile[55556]="$tmpfile"
+    _IS_active=(55556)
+    _IS_done=0
+    failure_count=0
+
+    run _IS_collect_result 55556
+
+    [[ "$output" == *"✗"* ]]
+    [[ "$output" == *"errserver"* ]]
+    [[ "$output" == *"SSH timeout"* ]]
+}
+
+@test "_IS_collect_result: removes processed pid from _IS_active" {
+    local tmpfile
+    tmpfile=$(mktemp)
+    echo "  ✓ Done" > "$tmpfile"
+    echo 0 > "${tmpfile}.exit"
+    touch "${tmpfile}.done"
+    _IS_pid_short[55557]="srv-remove"
+    _IS_pid_tmpfile[55557]="$tmpfile"
+    _IS_active=(55557)
+    _IS_done=0
+
+    _IS_collect_result 55557 > /dev/null
+
+    [ "${#_IS_active[@]}" -eq 0 ]
+}
+
 # ── iterate_servers (parallel mode) ──────────────────────────────────────────
 
 _make_parallel_cfg() {
@@ -414,6 +566,22 @@ _make_parallel_cfg() {
     iterate_servers _pll2_local _pll2_remote
 
     [ "$success_count" -eq 2 ]
+}
+
+@test "iterate_servers: parallel mode → updates failure_count for ✗ output" {
+    export CONFIG_FILE
+    CONFIG_FILE=$(_make_parallel_cfg)
+    MASTER_HOST="__not_a_real_host__"
+    ENV="dev"
+    failure_count=0
+    success_count=0
+
+    _pll_fail_local()  { ok "local"; }
+    _pll_fail_remote() { err "boom"; }
+
+    iterate_servers _pll_fail_local _pll_fail_remote
+    [ "$failure_count" -eq 2 ]
+    [ "$success_count" -eq 0 ]
 }
 
 @test "iterate_servers: parallel mode → applies __APPEND protocol" {

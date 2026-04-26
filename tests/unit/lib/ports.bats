@@ -32,6 +32,22 @@ setup() {
     [[ "$output" == *"config portrange"* ]]
 }
 
+@test "_port_read_range: exits 1 when only min is set" {
+    jq '. + {"port_range": {"min": 8000}}' "$CONFIG_FILE" \
+        > "$BATS_TEST_TMPDIR/t.json" && mv "$BATS_TEST_TMPDIR/t.json" "$CONFIG_FILE"
+    run _port_read_range
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"port_range not configured"* ]]
+}
+
+@test "_port_read_range: exits 1 when only max is set" {
+    jq '. + {"port_range": {"max": 9000}}' "$CONFIG_FILE" \
+        > "$BATS_TEST_TMPDIR/t.json" && mv "$BATS_TEST_TMPDIR/t.json" "$CONFIG_FILE"
+    run _port_read_range
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"port_range not configured"* ]]
+}
+
 @test "_port_read_range: sets PORT_MIN and PORT_MAX globals" {
     jq '. + {"port_range": {"min": 8000, "max": 9000}}' "$CONFIG_FILE" \
         > "$BATS_TEST_TMPDIR/t.json" && mv "$BATS_TEST_TMPDIR/t.json" "$CONFIG_FILE"
@@ -71,4 +87,18 @@ setup() {
 @test "_port_collect_used: entry has correct server FQDN format (contains dot)" {
     srv=$(_port_collect_used | jq -r '[.[] | select(.port == 9000)] | .[0].server')
     [[ "$srv" == *"."* ]]
+}
+
+@test "_port_collect_used: PublishedPort=0 entries excluded" {
+    echo '{"dev":{"dev1.fleet.test":{"api":[{"Service":"web","Publishers":[{"PublishedPort":0,"TargetPort":80,"Protocol":"tcp"}]}]}}}' \
+        > "$HOME/.data/services.json"
+    count=$(_port_collect_used | jq 'length')
+    [ "$count" = "0" ]
+}
+
+@test "_port_collect_used: empty publishers array → empty result" {
+    echo '{"dev":{"dev1.fleet.test":{"api":[{"Service":"web","Publishers":[]}]}}}' \
+        > "$HOME/.data/services.json"
+    result=$(_port_collect_used)
+    [ "$(printf '%s' "$result" | jq 'length')" = "0" ]
 }
